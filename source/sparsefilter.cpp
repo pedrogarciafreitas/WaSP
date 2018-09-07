@@ -8,7 +8,71 @@
 #include <algorithm>
 
 #define NULL 0
-#define MIN_REG_SZ 256
+#define MIN_REG_SZ 1024
+#define NNt_reg 3
+#define Ms_reg 12
+
+void checkOutOfBounds(const int RR, const int CC, const int nr, const int nc, const int dy_0, const int dx_0, int &dy, int &dx ) {
+
+	if (RR > nr - 1) {
+		dy = dy_0 - (RR - (nr - 1));
+	}
+	if (RR < 0) {
+		dy = dy_0 - RR;
+	}
+	if (CC > nc - 1) {
+		dx = dx_0 - (CC - (nc - 1));
+	}
+	if (CC < 0) {
+		dx = dx_0 - CC;
+	}
+
+}
+
+int checkBoundaryPixels(int *label_im, int offset, const int ijk, const int NNt, const int ir, const int ic, const int dy, const int dx, const int nr, const int nc ) {
+	if (*(label_im + offset) != ijk) { // if the pixel being selected is NOT part of the region
+
+		double min_d_dy_dx = FLT_MAX;
+
+		for (int dy1_0 = -NNt; dy1_0 <= NNt; dy1_0++) {
+			for (int dx1_0 = -NNt; dx1_0 <= NNt; dx1_0++) {
+
+				int RR1 = ir + dy + dy1_0;
+				int CC1 = ic + dx + dx1_0;
+
+				int dy1 = dy1_0;
+				int dx1 = dx1_0;
+
+				if (RR1 > nr - 1) {
+					dy1 = dy1_0 - (RR1 - (nr - 1));
+				}
+				if (RR1 < 0) {
+					dy1 = dy1_0 - RR1;
+				}
+				if (CC1 > nc - 1) {
+					dx1 = dx1_0 - (CC1 - (nc - 1));
+				}
+				if (CC1 < 0) {
+					dx1 = dx1_0 - CC1;
+				}
+
+				int offset2 = ir + dy + dy1 + nr*(ic + dx + dx1);
+
+				if (*(label_im + offset2) == ijk) {
+					double ddx = static_cast<double>(dx1) - static_cast<double>(dx);
+					double ddy = static_cast<double>(dy1) - static_cast<double>(dy);
+					double d_dydx = ddx*ddx + ddy*ddy;
+					if (d_dydx < min_d_dy_dx) {
+						min_d_dy_dx = d_dydx;
+						offset = offset2;
+					}
+				}
+			}
+		}
+	}
+
+	return offset;
+}
 
 void applyRegionSparseFilter(view *view0) {
 
@@ -18,8 +82,8 @@ void applyRegionSparseFilter(view *view0) {
 	int *reg_histogram = view0->reg_histogram;
 	int *label_im = view0->label_im;
 
-	int NNt = 1;
-	int Ms = 10;
+	int NNt = NNt_reg;
+	int Ms = Ms_reg;
 
 	int nr = view0->nr;
 	int nc = view0->nc;
@@ -29,7 +93,7 @@ void applyRegionSparseFilter(view *view0) {
 	float *final_view = new float[nr*nc * 3]();
 
 	for (int ii = 0; ii < nr*nc*3; ii++) {
-		*(final_view + ii) = (float)*(pshort + ii);
+		*(final_view + ii) = static_cast<float>( *(pshort + ii) );
 	}
 
 	int reg_i = 0;
@@ -44,12 +108,12 @@ void applyRegionSparseFilter(view *view0) {
 
 			reg_i++;
 
-			float *theta = new float[theta0.size()]();
+			float *theta = new float[(2 * NNt + 1)*(2 * NNt + 1) + 1]();
 
 			for (int ii = 0; ii < theta0.size(); ii++) {
 				if (Regr0.at(ii) > 0) {
-					theta[Regr0.at(ii) - 1] = (float)theta0.at(ii);
-					printf("%i\t%f\n", Regr0.at(ii), theta[Regr0.at(ii) - 1]);
+					theta[Regr0.at(ii) - 1] = static_cast<float>( theta0.at(ii) );
+					//printf("%i\t%f\n", Regr0.at(ii), theta[Regr0.at(ii) - 1]);
 				}
 			}
 
@@ -82,65 +146,14 @@ void applyRegionSparseFilter(view *view0) {
 						int dy = dy_0;
 						int dx = dx_0;
 
-						if (RR > nr - 1) {
-							dy = dy_0 - (RR - (nr - 1));
-						}
-						if (RR < 0) {
-							dy = dy_0 - RR;
-						}
-						if (CC > nc - 1) {
-							dx = dx_0 - (CC - (nc - 1));
-						}
-						if (CC < 0) {
-							dx = dx_0 - CC;
-						}
-
+						checkOutOfBounds(RR, CC, nr, nc, dy_0, dx_0, dy, dx);
 
 						int offset = ir + dy + nr*(ic + dx);
-
-						if (*(label_im + offset) != ijk) { // if the pixel being selected is NOT part of the region
-
-							double min_d_dy_dx = FLT_MAX;
-
-							for (int dy1_0 = -NNt; dy1_0 <= NNt; dy1_0++) {
-								for (int dx1_0 = -NNt; dx1_0 <= NNt; dx1_0++) {
-
-									int RR1 = ir + dy + dy1_0;
-									int CC1 = ic + dx + dx1_0;
-
-									int dy1 = dy1_0;
-									int dx1 = dx1_0;
-
-									if (RR1 > nr - 1) {
-										dy1 = dy1_0 - (RR1 - (nr - 1));
-									}
-									if (RR1 < 0) {
-										dy1 = dy1_0 - RR1;
-									}
-									if (CC1 > nc - 1) {
-										dx1 = dx1_0 - (CC1 - (nc - 1));
-									}
-									if (CC1 < 0) {
-										dx1 = dx1_0 - CC1;
-									}
-
-									int offset2 = ir + dy + dy1 + nr*(ic + dx + dx1);
-
-									if (*(label_im + offset2) == ijk) {
-										double ddx = (double)dx1 - (double)dx;
-										double ddy = (double)dy1 - (double)dy;
-										double d_dydx = ddx*ddx + ddy*ddy;
-										if (d_dydx < min_d_dy_dx) {
-											min_d_dy_dx = d_dydx;
-											offset = offset2;
-										}
-									}
-								}
-							}
-						}
+						
+						offset = checkBoundaryPixels(label_im, offset, ijk, NNt, ir, ic, dy, dx, nr, nc);
 
 						for (int icomp = 0; icomp < 3; icomp++) {
-							final_view[ ind + icomp*nr*nc ] += theta[ie] * ((float)pshort[ offset + icomp*nr*nc ]);
+							final_view[ ind + icomp*nr*nc ] += theta[ie] * (static_cast<float>(pshort[ offset + icomp*nr*nc ]));
 						}
 
 						ie++;
@@ -163,7 +176,7 @@ void applyRegionSparseFilter(view *view0) {
 		if (final_view[ii] > (1 << BIT_DEPTH) - 1) //(pow(2, BIT_DEPTH) - 1))
 			final_view[ii] = (1 << BIT_DEPTH) - 1;// (pow(2, BIT_DEPTH) - 1);
 
-		pshort[ii] = (unsigned short)floor(final_view[ii] +0.5);
+		pshort[ii] = static_cast<unsigned short>(floor(final_view[ii] +0.5));
 	}
 
 	delete[](final_view);
@@ -181,8 +194,8 @@ void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
 	int nr = view0->nr;
 	int nc = view0->nc;
 
-	int NNt = 1;
-	int Ms = 10;
+	int NNt = NNt_reg;
+	int Ms = Ms_reg;
 
 	unsigned short *pshort = view0->color;
 
@@ -197,8 +210,8 @@ void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
 				}
 			}
 
-			int Npp = (int)inds.size() * 3;
-			int Npp0 = (int)inds.size();
+			int Npp = static_cast<int>(inds.size() * 3);
+			int Npp0 = static_cast<int>(inds.size());
 
 			int MT = (NNt * 2 + 1)*(NNt * 2 + 1) + 1; /* number of regressors */
 
@@ -228,72 +241,22 @@ void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
 						int dy = dy_0;
 						int dx = dx_0;
 
-						if (RR > nr - 1) {
-							dy = dy_0 - (RR - (nr - 1));
-						}
-						if (RR < 0) {
-							dy = dy_0 - RR;
-						}
-						if (CC > nc - 1) {
-							dx = dx_0 - (CC - (nc - 1));
-						}
-						if (CC < 0) {
-							dx = dx_0 - CC;
-						}
+						checkOutOfBounds(RR, CC, nr, nc, dy_0, dx_0, dy, dx);
 
 						int offset = ir + dy + nr*(ic + dx);
 
 						/* get the desired Yd*/
 						if (dy == 0 && dx == 0) {
 							for (int icomp = 0; icomp < 3; icomp++) {
-								*(Yd + iiu + icomp*Npp0) = ((double)*(original_color_view + offset + icomp*nr*nc)) / ((double)(1 << BIT_DEPTH) - 1);
+								*(Yd + iiu + icomp*Npp0) = ( static_cast<double>(*(original_color_view + offset + icomp*nr*nc))) / ( static_cast<double>( (1 << BIT_DEPTH) - 1) );
 							}
 						}
 
-						if (*(label_im + offset) != ijk) { // if the pixel being selected is NOT part of the region
-
-							double min_d_dy_dx = FLT_MAX;
-
-							for (int dy1_0 = -NNt; dy1_0 <= NNt; dy1_0++) {
-								for (int dx1_0 = -NNt; dx1_0 <= NNt; dx1_0++) {
-
-									int RR1 = ir + dy + dy1_0;
-									int CC1 = ic + dx + dx1_0;
-
-									int dy1 = dy1_0;
-									int dx1 = dx1_0;
-
-									if (RR1 > nr - 1) {
-										dy1 = dy1_0 - (RR1 - (nr - 1));
-									}
-									if (RR1 < 0) {
-										dy1 = dy1_0 - RR1;
-									}
-									if (CC1 > nc - 1) {
-										dx1 = dx1_0 - (CC1 - (nc - 1));
-									}
-									if (CC1 < 0) {
-										dx1 = dx1_0 - CC1;
-									}
-
-									int offset2 = ir + dy + dy1 + nr*(ic + dx + dx1);
-
-									if (*(label_im + offset2) == ijk) {
-										double ddx = (double)dx1 - (double)dx;
-										double ddy = (double)dy1 - (double)dy;
-										double d_dydx = ddx*ddx + ddy*ddy;
-										if (d_dydx < min_d_dy_dx) {
-											min_d_dy_dx = d_dydx;
-											offset = offset2;
-										}
-									}
-								}
-							}
-						}
+						offset = checkBoundaryPixels(label_im, offset, ijk, NNt, ir, ic, dy, dx, nr, nc);
 
 						for (int icomp = 0; icomp < 3; icomp++) {
 							/* get the regressors */
-							*(AA + iiu + icomp*Npp0 + ai*Npp) = ((double)*(pshort + offset + icomp*nr*nc)) / ((double)(1 << BIT_DEPTH) - 1);// (pow(2, BIT_DEPTH) - 1);
+							*(AA + iiu + icomp*Npp0 + ai*Npp) = ( static_cast<double>( *(pshort + offset + icomp*nr*nc))) / ( static_cast<double>((1 << BIT_DEPTH) - 1));// (pow(2, BIT_DEPTH) - 1);
 						}
 						ai++;
 					}
@@ -306,11 +269,11 @@ void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
 
 			int Mtrue = FastOLS_new(&AA, &Yd, PredRegr0, PredTheta0, Ms, MT, MT, Npp);
 
-			printf("Region\t%i filter:\t", ijk);
-			for (int ri = 0; ri < Ms; ri++) {
-				printf("\t%f", PredTheta0[ri]);
-			}
-			printf("\n");
+			//printf("Region\t%i filter:\t", ijk);
+			//for (int ri = 0; ri < Ms; ri++) {
+			//	printf("\t%f", PredTheta0[ri]);
+			//}
+			//printf("\n");
 
 			std::vector< int > PredRegr;
 			std::vector< double > PredTheta;

@@ -625,7 +625,7 @@ int main(int argc, char** argv) {
 			delete[](tmp_depth);
 		}
 
-		int QD = 100;
+		int QD = 160;
 
 		int *tmp_d = new int[SAI->nr*SAI->nc]();
 		for (int ii = 0; ii < SAI->nr*SAI->nc; ii++) {
@@ -857,16 +857,21 @@ int main(int argc, char** argv) {
 
 		double psnr_with_region_sparse = 0.0;
 		/* here region sparse */
-		if (SAI->Ms > 0) {
+		if (1 && ii>4) {
 
 			getRegionSparseFilter(SAI, original_color_view);
 			applyRegionSparseFilter(SAI);
 
 			psnr_with_region_sparse = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
+
+			char w_reg_sparse[1024];
+			sprintf(w_reg_sparse, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_wreg_sparse.ppm");
+			aux_write16PGMPPM(w_reg_sparse, SAI->nc, SAI->nr, 3, SAI->color);
+
 		}
 
 		output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", psnr_with_region_sparse);
-		output_buffer_length += sprintf(output_results + output_buffer_length, "\t%i", SAI->region_Regr.size());
+		output_buffer_length += sprintf(output_results + output_buffer_length, "\t%i", static_cast<int>( SAI->region_Regr.size()) );
 
 		delete[](colorview_temp);
 

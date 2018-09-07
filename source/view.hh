@@ -2,8 +2,9 @@
 #define VIEW_HH
 
 #include <stdint.h>
+#include <vector>
 
-#define MEDFILT_DEPTH false
+#define MEDFILT_DEPTH true
 
 struct view{
 
@@ -73,6 +74,15 @@ struct view{
 	//bool has_min_inv_depth;
 
 	bool has_x_displacement, has_y_displacement;
+
+
+	/* for regions */
+	int *label_im;
+	int nregions;
+	int *reg_histogram;
+
+	std::vector< std::vector< int > > region_Regr;
+	std::vector< std::vector< double > > region_Theta;
 
 };
 

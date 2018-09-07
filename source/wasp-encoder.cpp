@@ -21,6 +21,8 @@
 #include "inpainting.hh"
 #include "predictdepth.hh"
 #include "codestream.hh"
+#include "connected_components.hh"
+#include "fastols.hh"
 
 
 #define USE_difftest_ng false
@@ -590,7 +592,67 @@ int main(int argc, char** argv) {
 		SAI->color = new unsigned short[SAI->nr*SAI->nc * 3]();
 		SAI->depth = new unsigned short[SAI->nr*SAI->nc]();
 
-		predictDepth(SAI,LF);
+		/*----------------DISPARITY------------------------------------------------------------*/
+		/* forward warp depth */
+		if (SAI->has_depth_references) {
+			predictDepth(SAI, LF);
+		}
+
+		char pgm_residual_depth_path[1024];
+		char jp2_residual_depth_path_jp2[1024];
+
+		if (SAI->residual_rate_depth > 0 && depth_file_exist) { /* residual depth if needed */
+
+			sprintf(pgm_residual_depth_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.pgm");
+
+			sprintf(jp2_residual_depth_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.jp2");
+
+			encodeResidualJP2(SAI->nr, SAI->nc, original_depth_view, SAI->depth, pgm_residual_depth_path,
+				kdu_compress_path, jp2_residual_depth_path_jp2, SAI->residual_rate_depth, 1, 0, 1);
+
+			decodeResidualJP2(SAI->depth, kdu_expand_path, jp2_residual_depth_path_jp2, pgm_residual_depth_path, ncomp1, 0, (1 << 16) - 1, 1);
+
+			SAI->has_depth_residual = true;
+		}
+
+		/* median filter depth */
+		if (MEDFILT_DEPTH) {
+			unsigned short *tmp_depth = new unsigned short[SAI->nr*SAI->nc]();
+			int startt = clock();
+			medfilt2D(SAI->depth, tmp_depth, 3, SAI->nr, SAI->nc);
+			std::cout << "time elapsed in depth median filtering\t" << (float)((int)clock() - startt) / CLOCKS_PER_SEC << "\n";
+			memcpy(SAI->depth, tmp_depth, sizeof(unsigned short)*SAI->nr*SAI->nc);
+			delete[](tmp_depth);
+		}
+
+		int QD = 100;
+
+		int *tmp_d = new int[SAI->nr*SAI->nc]();
+		for (int ii = 0; ii < SAI->nr*SAI->nc; ii++) {
+			*(tmp_d + ii) = (int)(*(SAI->depth + ii)) / QD;
+		}
+
+		int nregions = 0;
+		int *reg_histogram = 0;
+		int *label_im = get_labels(tmp_d, SAI->nr, SAI->nc, nregions, reg_histogram);
+
+		SAI->label_im = label_im;
+		SAI->nregions = nregions;
+		SAI->reg_histogram = reg_histogram;
+
+		unsigned short *labels = new unsigned short[SAI->nr*SAI->nc]();
+		for (int ii = 0; ii < SAI->nr*SAI->nc; ii++) {
+			*(labels + ii) = (unsigned short) *(label_im + ii);
+		}
+
+		char labels_file[1024];
+		sprintf(labels_file, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_labels.pgm");
+		aux_write16PGMPPM(labels_file, SAI->nc, SAI->nr, 1, labels);
+
+		delete[](labels);
+		//delete[](label_im);
+		delete[](tmp_d);
+		/*----------------DISPARITY ENDS------------------------------------------------------------*/
 
 		/* color prediction */
 		/* forward warp color */
@@ -769,6 +831,15 @@ int main(int argc, char** argv) {
 			
 		}
 
+		/* write both with and without sparse to disk */
+		char w_sparse[1024], wo_sparse[1024];
+		sprintf(w_sparse, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_wsparse.ppm");
+		sprintf(wo_sparse, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_wosparse.ppm");
+
+		aux_write16PGMPPM(w_sparse, SAI->nc, SAI->nr, 3, SAI->color);
+		aux_write16PGMPPM(wo_sparse, SAI->nc, SAI->nr, 3, colorview_temp);
+
+
 		if (SAI->use_global_sparse) { /* check validity of sparse filter */
 			if ( psnr_with_sparse<psnr_without_sparse ) //<0.1
 			{
@@ -784,10 +855,22 @@ int main(int argc, char** argv) {
 			output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", 0.0);
 		}
 
+		double psnr_with_region_sparse = 0.0;
+		/* here region sparse */
+		if (SAI->Ms > 0) {
+
+			getRegionSparseFilter(SAI, original_color_view);
+			applyRegionSparseFilter(SAI);
+
+			psnr_with_region_sparse = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
+		}
+
+		output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", psnr_with_region_sparse);
+		output_buffer_length += sprintf(output_results + output_buffer_length, "\t%i", SAI->region_Regr.size());
+
 		delete[](colorview_temp);
 
 		char ppm_residual_path[1024];
-
 		char jp2_residual_path_jp2[1024];
 
 		char pgm_residual_Y_path[1024];
@@ -797,16 +880,13 @@ int main(int argc, char** argv) {
 		char pgm_residual_Cr_path[1024];
 		char jp2_residual_Cr_path_jp2[1024];
 
-		char pgm_residual_depth_path[1024];
-
-		char jp2_residual_depth_path_jp2[1024];
 
 		char *ycbcr_pgm_names[3];
 		char *ycbcr_jp2_names[3];
 
 		float rate_a1 = 0;
 
-		/* get residual */
+		/* get color residual */
 		if (SAI->residual_rate_color > 0)
 		{
 
@@ -919,30 +999,6 @@ int main(int argc, char** argv) {
 			}
 
 			SAI->has_color_residual = true;
-		}
-
-		if (SAI->residual_rate_depth > 0 && depth_file_exist) { /* residual depth if needed */
-
-			sprintf(pgm_residual_depth_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.pgm");
-
-			sprintf(jp2_residual_depth_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.jp2");
-
-			encodeResidualJP2(SAI->nr, SAI->nc, original_depth_view, SAI->depth, pgm_residual_depth_path,
-				kdu_compress_path, jp2_residual_depth_path_jp2, SAI->residual_rate_depth, 1, 0, 1);
-
-			decodeResidualJP2(SAI->depth, kdu_expand_path, jp2_residual_depth_path_jp2, pgm_residual_depth_path, ncomp1, 0, (1<<16) - 1, 1);
-
-			SAI->has_depth_residual = true;
-		}
-
-		/* median filter depth */
-		if (MEDFILT_DEPTH) {
-			unsigned short *tmp_depth = new unsigned short[SAI->nr*SAI->nc]();
-			int startt = clock();
-			medfilt2D(SAI->depth, tmp_depth, 3, SAI->nr, SAI->nc);
-			std::cout << "time elapsed in depth median filtering\t" << (float)( (int)clock() - startt )/CLOCKS_PER_SEC << "\n";
-			memcpy(SAI->depth, tmp_depth, sizeof(unsigned short)*SAI->nr*SAI->nc);
-			delete[](tmp_depth);
 		}
 
 		aux_write16PGMPPM(SAI->path_out_ppm, SAI->nc, SAI->nr, 3, SAI->color);

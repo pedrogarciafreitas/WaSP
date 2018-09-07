@@ -21,6 +21,7 @@
 #include "inpainting.hh"
 #include "predictdepth.hh"
 #include "codestream.hh"
+#include "connected_components.hh"
 
 #define SAVE_PARTIAL_WARPED_VIEWS false
 
@@ -41,17 +42,17 @@ int main(int argc, char** argv) {
 
 	int n_bytes_prediction = 0, n_bytes_residual = 0;
 
-	n_bytes_prediction += (int)fread(&n_views_total, sizeof(int), 1,input_LF)* sizeof(int);
+	n_bytes_prediction += (int)fread(&n_views_total, sizeof(int), 1, input_LF) * sizeof(int);
 
 	int _NR, _NC;
 
-	n_bytes_prediction += (int)fread(&_NR, sizeof(int), 1, input_LF)* sizeof(int);
-	n_bytes_prediction += (int)fread(&_NC, sizeof(int), 1, input_LF)* sizeof(int);
+	n_bytes_prediction += (int)fread(&_NR, sizeof(int), 1, input_LF) * sizeof(int);
+	n_bytes_prediction += (int)fread(&_NC, sizeof(int), 1, input_LF) * sizeof(int);
 
 	bool YUV_TRANSFORM = false;
 
 	int yuv_transform_s;
-	n_bytes_prediction += (int)fread(&yuv_transform_s, sizeof(int), 1, input_LF)* sizeof(int);
+	n_bytes_prediction += (int)fread(&yuv_transform_s, sizeof(int), 1, input_LF) * sizeof(int);
 
 	YUV_TRANSFORM = yuv_transform_s > 0 ? true : false;
 
@@ -67,9 +68,9 @@ int main(int argc, char** argv) {
 
 	int ii = 0; /*view index*/
 
-	while ( ii < n_views_total ) {
+	while (ii < n_views_total) {
 
-		view *SAI = LF+ii; 
+		view *SAI = LF + ii;
 		ii++;
 
 		initView(SAI);
@@ -85,7 +86,7 @@ int main(int argc, char** argv) {
 
 		codestreamToViewHeader(n_bytes_prediction, SAI, input_LF, mconf);
 
-		if ( feof( input_LF ) ) {
+		if (feof(input_LF)) {
 			printf("File reading error. Terminating\t...\n");
 			exit(0);
 		}
@@ -93,7 +94,139 @@ int main(int argc, char** argv) {
 		SAI->color = new unsigned short[SAI->nr*SAI->nc * 3]();
 		SAI->depth = new unsigned short[SAI->nr*SAI->nc]();
 
-		predictDepth(SAI, LF);
+		/* Get color and disparity residuals */
+		if (SAI->has_color_residual)
+		{
+			//n_bytes_residual += (int)fread(&n_bytes_color_residual, sizeof(int), 1, input_LF)* sizeof(int);
+			if (SAI->yuv_transform && YUV_TRANSFORM) {
+
+				char pgm_residual_Y_path[1024];
+				char jp2_residual_Y_path_jp2[1024];
+				char pgm_residual_Cb_path[1024];
+				char jp2_residual_Cb_path_jp2[1024];
+				char pgm_residual_Cr_path[1024];
+				char jp2_residual_Cr_path_jp2[1024];
+
+				char *ycbcr_pgm_names[3];
+				char *ycbcr_jp2_names[3];
+
+				sprintf(pgm_residual_Y_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Y_residual.pgm");
+				sprintf(jp2_residual_Y_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Y_residual.jp2");
+
+				sprintf(pgm_residual_Cb_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Cb_residual.pgm");
+				sprintf(jp2_residual_Cb_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Cb_residual.jp2");
+
+				sprintf(pgm_residual_Cr_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Cr_residual.pgm");
+				sprintf(jp2_residual_Cr_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Cr_residual.jp2");
+
+				ycbcr_pgm_names[0] = pgm_residual_Y_path;
+				ycbcr_pgm_names[1] = pgm_residual_Cb_path;
+				ycbcr_pgm_names[2] = pgm_residual_Cr_path;
+
+				ycbcr_jp2_names[0] = jp2_residual_Y_path_jp2;
+				ycbcr_jp2_names[1] = jp2_residual_Cb_path_jp2;
+				ycbcr_jp2_names[2] = jp2_residual_Cr_path_jp2;
+
+				for (int icomp = 0; icomp < 3; icomp++) {
+					readResidualFromDisk(ycbcr_jp2_names[icomp], n_bytes_residual, input_LF, JP2_dict);
+				}
+
+			} else {
+
+				int ncomp1 = 0; /* temporary to hold the number of components */
+
+				char ppm_residual_path[1024];
+
+				char jp2_residual_path_jp2[1024];
+
+				sprintf(ppm_residual_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.ppm");
+
+				sprintf(jp2_residual_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.jp2");
+
+				readResidualFromDisk(jp2_residual_path_jp2, n_bytes_residual, input_LF, JP2_dict);
+
+				//decodeResidualJP2(SAI->color, kdu_expand_path, jp2_residual_path_jp2, ppm_residual_path, ncomp1, (1 << BIT_DEPTH) - 1, (1 << BIT_DEPTH) - 1, RESIDUAL_16BIT_bool);
+			}
+		}
+
+		if (SAI->has_depth_residual) { /* residual depth if needed */
+
+									   //n_bytes_residual =+ (int)fread(&n_bytes_depth_residual, sizeof(int), 1, input_LF)* sizeof(int);
+
+			int ncomp1 = 0; /* temporary to hold the number of components */
+
+			char pgm_residual_depth_path[1024];
+
+			char jp2_residual_depth_path_jp2[1024];
+
+			sprintf(pgm_residual_depth_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.pgm");
+
+			sprintf(jp2_residual_depth_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.jp2");
+
+			readResidualFromDisk(jp2_residual_depth_path_jp2, n_bytes_residual, input_LF, JP2_dict);
+
+			//decodeResidualJP2(SAI->depth, kdu_expand_path, jp2_residual_depth_path_jp2, pgm_residual_depth_path, ncomp1, 0, (1 << 16) - 1, 1);
+
+		}
+
+		/* forward warp depth */
+		if (SAI->has_depth_references) {
+			predictDepth(SAI, LF);
+		}
+
+		if (SAI->has_depth_residual) { /* residual depth if needed */
+
+									   //n_bytes_residual =+ (int)fread(&n_bytes_depth_residual, sizeof(int), 1, input_LF)* sizeof(int);
+
+			int ncomp1 = 0; /* temporary to hold the number of components */
+
+			char pgm_residual_depth_path[1024];
+
+			char jp2_residual_depth_path_jp2[1024];
+
+			sprintf(pgm_residual_depth_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.pgm");
+
+			sprintf(jp2_residual_depth_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.jp2");
+
+			//readResidualFromDisk(jp2_residual_depth_path_jp2, n_bytes_residual, input_LF, JP2_dict);
+
+			decodeResidualJP2(SAI->depth, kdu_expand_path, jp2_residual_depth_path_jp2, pgm_residual_depth_path, ncomp1, 0, (1 << 16) - 1, 1);
+
+		}
+
+		/* median filter depth */
+		if (MEDFILT_DEPTH) {
+			unsigned short *tmp_depth = new unsigned short[SAI->nr*SAI->nc]();
+			int startt = clock();
+			medfilt2D(SAI->depth, tmp_depth, 3, SAI->nr, SAI->nc);
+			std::cout << "time elapsed in depth median filtering\t" << (int)clock() - startt << "\n";
+			memcpy(SAI->depth, tmp_depth, sizeof(unsigned short)*SAI->nr*SAI->nc);
+			delete[](tmp_depth);
+		}
+
+		int QD = 100;
+
+		int *tmp_d = new int[SAI->nr*SAI->nc]();
+		for (int ii = 0; ii < SAI->nr*SAI->nc; ii++) {
+			*(tmp_d + ii) = (int)(*(SAI->depth + ii)) / QD;
+		}
+
+		int nregions = 0;
+		int *reg_histogram = 0;
+		int *label_im = get_labels(tmp_d, SAI->nr, SAI->nc, nregions, reg_histogram);
+
+		unsigned short *labels = new unsigned short[SAI->nr*SAI->nc]();
+		for (int ii = 0; ii < SAI->nr*SAI->nc; ii++) {
+			*(labels + ii) = (unsigned short) *(label_im + ii);
+		}
+
+		char labels_file[1024];
+		sprintf(labels_file, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_labels.pgm");
+		aux_write16PGMPPM(labels_file, SAI->nc, SAI->nr, 1, labels);
+
+		delete[](labels);
+		delete[](label_im);
+		delete[](tmp_d);
 
 		/* forward warp color */
 		if (SAI->has_color_references) {
@@ -161,7 +294,7 @@ int main(int argc, char** argv) {
 				std::cout << "time elapsed in color median merging\t" << (int)clock() - startt << "\n";
 				holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
 			}
-			
+
 			/* clean */
 			for (int ij = 0; ij < SAI->n_references; ij++)
 			{
@@ -175,7 +308,7 @@ int main(int argc, char** argv) {
 			delete[](DispTargs);
 		}
 
-		if ( SAI->use_global_sparse )
+		if (SAI->use_global_sparse)
 		{
 			applyGlobalSparseFilter(SAI);
 		}
@@ -185,7 +318,7 @@ int main(int argc, char** argv) {
 		int n_bytes_color_residual = 0, n_bytes_depth_residual = 0;
 
 		/* get residual */
-		if ( SAI->has_color_residual )
+		if (SAI->has_color_residual)
 		{
 			//n_bytes_residual += (int)fread(&n_bytes_color_residual, sizeof(int), 1, input_LF)* sizeof(int);
 			if (SAI->yuv_transform && YUV_TRANSFORM) {
@@ -217,11 +350,11 @@ int main(int argc, char** argv) {
 				ycbcr_jp2_names[1] = jp2_residual_Cb_path_jp2;
 				ycbcr_jp2_names[2] = jp2_residual_Cr_path_jp2;
 
-				for (int icomp = 0; icomp < 3; icomp++) {
+				//for (int icomp = 0; icomp < 3; icomp++) {
 
-					readResidualFromDisk(ycbcr_jp2_names[icomp], n_bytes_residual, input_LF, JP2_dict);
+				//	readResidualFromDisk(ycbcr_jp2_names[icomp], n_bytes_residual, input_LF, JP2_dict);
 
-				}
+				//}
 
 				int offset_v = 0;
 				if (RESIDUAL_16BIT) {
@@ -246,42 +379,11 @@ int main(int argc, char** argv) {
 
 				sprintf(jp2_residual_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.jp2");
 
-				readResidualFromDisk(jp2_residual_path_jp2, n_bytes_residual, input_LF, JP2_dict);
+				//readResidualFromDisk(jp2_residual_path_jp2, n_bytes_residual, input_LF, JP2_dict);
 
 				decodeResidualJP2(SAI->color, kdu_expand_path, jp2_residual_path_jp2, ppm_residual_path, ncomp1, (1 << BIT_DEPTH) - 1, (1 << BIT_DEPTH) - 1, RESIDUAL_16BIT_bool);
 			}
-			
-		}
 
-
-		if (SAI->has_depth_residual) { /* residual depth if needed */
-
-			//n_bytes_residual =+ (int)fread(&n_bytes_depth_residual, sizeof(int), 1, input_LF)* sizeof(int);
-
-			int ncomp1 = 0; /* temporary to hold the number of components */
-
-			char pgm_residual_depth_path[1024];
-
-			char jp2_residual_depth_path_jp2[1024];
-
-			sprintf(pgm_residual_depth_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.pgm");
-
-			sprintf(jp2_residual_depth_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.jp2");
-
-			readResidualFromDisk(jp2_residual_depth_path_jp2, n_bytes_residual, input_LF, JP2_dict);
-
-			decodeResidualJP2(SAI->depth, kdu_expand_path, jp2_residual_depth_path_jp2, pgm_residual_depth_path, ncomp1, 0, (1 << 16) - 1,1);
-
-		}
-
-		/* median filter depth */
-		if (MEDFILT_DEPTH) {
-			unsigned short *tmp_depth = new unsigned short[SAI->nr*SAI->nc]();
-			int startt = clock();
-			medfilt2D(SAI->depth, tmp_depth, 3, SAI->nr, SAI->nc);
-			std::cout << "time elapsed in depth median filtering\t" << (int)clock() - startt << "\n";
-			memcpy(SAI->depth, tmp_depth, sizeof(unsigned short)*SAI->nr*SAI->nc);
-			delete[](tmp_depth);
 		}
 
 		sprintf(SAI->path_out_ppm, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, ".ppm");
@@ -299,7 +401,7 @@ int main(int argc, char** argv) {
 			delete[](SAI->depth);
 			SAI->depth = NULL;
 		}
-		
+
 		if (SAI->seg_vp != NULL) {
 			delete[](SAI->seg_vp);
 			SAI->seg_vp = NULL;
@@ -339,6 +441,6 @@ int main(int argc, char** argv) {
 
 	delete[](LF);
 
-	
+
 	exit(0);
 }

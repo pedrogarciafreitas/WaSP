@@ -55,4 +55,11 @@ void initView(view* view)
 	view->has_x_displacement = false;
 	view->has_y_displacement = false;
 
+
+	/* for regions */
+	view->label_im = NULL;
+	view->nregions = 0;
+	view->reg_histogram = NULL;
+
+
 }

@@ -8,6 +8,335 @@
 #include <algorithm>
 
 #define NULL 0
+#define MIN_REG_SZ 256
+
+void applyRegionSparseFilter(view *view0) {
+
+	//int MIN_REG_SZ = 256;
+
+	int nregions = view0->nregions;
+	int *reg_histogram = view0->reg_histogram;
+	int *label_im = view0->label_im;
+
+	int NNt = 1;
+	int Ms = 10;
+
+	int nr = view0->nr;
+	int nc = view0->nc;
+
+	unsigned short *pshort = view0->color;
+
+	float *final_view = new float[nr*nc * 3]();
+
+	for (int ii = 0; ii < nr*nc*3; ii++) {
+		*(final_view + ii) = (float)*(pshort + ii);
+	}
+
+	int reg_i = 0;
+
+	for (int ijk = 1; ijk <= nregions; ijk++) {
+
+		if (reg_histogram[ijk] > MIN_REG_SZ) {
+
+			std::vector< double > theta0 = view0->region_Theta.at(reg_i);
+
+			std::vector< int > Regr0 = view0->region_Regr.at(reg_i);
+
+			reg_i++;
+
+			float *theta = new float[theta0.size()]();
+
+			for (int ii = 0; ii < theta0.size(); ii++) {
+				if (Regr0.at(ii) > 0) {
+					theta[Regr0.at(ii) - 1] = (float)theta0.at(ii);
+					printf("%i\t%f\n", Regr0.at(ii), theta[Regr0.at(ii) - 1]);
+				}
+			}
+
+			std::vector< unsigned int > inds;
+			for (int ikj = 0; ikj < nr*nc; ikj++) {
+				if (label_im[ikj] == ijk) {
+					inds.push_back(ikj);
+				}
+			}
+
+			for (int ee = 0; ee < inds.size(); ee++) {
+
+				int ind = inds.at(ee);
+
+				int ir = ind % nr; //row
+				int ic = (ind - ir) / nr; //col
+
+				int ie = 0;
+
+				for (int icomp = 0; icomp < 3; icomp++) {
+					*(final_view + ind + nr*nc*icomp) = 0;
+				}
+
+				for (int dy_0 = -NNt; dy_0 <= NNt; dy_0++) {
+					for (int dx_0 = -NNt; dx_0 <= NNt; dx_0++) {
+
+						int RR = ir + dy_0;
+						int CC = ic + dx_0;
+
+						int dy = dy_0;
+						int dx = dx_0;
+
+						if (RR > nr - 1) {
+							dy = dy_0 - (RR - (nr - 1));
+						}
+						if (RR < 0) {
+							dy = dy_0 - RR;
+						}
+						if (CC > nc - 1) {
+							dx = dx_0 - (CC - (nc - 1));
+						}
+						if (CC < 0) {
+							dx = dx_0 - CC;
+						}
+
+
+						int offset = ir + dy + nr*(ic + dx);
+
+						if (*(label_im + offset) != ijk) { // if the pixel being selected is NOT part of the region
+
+							double min_d_dy_dx = FLT_MAX;
+
+							for (int dy1_0 = -NNt; dy1_0 <= NNt; dy1_0++) {
+								for (int dx1_0 = -NNt; dx1_0 <= NNt; dx1_0++) {
+
+									int RR1 = ir + dy + dy1_0;
+									int CC1 = ic + dx + dx1_0;
+
+									int dy1 = dy1_0;
+									int dx1 = dx1_0;
+
+									if (RR1 > nr - 1) {
+										dy1 = dy1_0 - (RR1 - (nr - 1));
+									}
+									if (RR1 < 0) {
+										dy1 = dy1_0 - RR1;
+									}
+									if (CC1 > nc - 1) {
+										dx1 = dx1_0 - (CC1 - (nc - 1));
+									}
+									if (CC1 < 0) {
+										dx1 = dx1_0 - CC1;
+									}
+
+									int offset2 = ir + dy + dy1 + nr*(ic + dx + dx1);
+
+									if (*(label_im + offset2) == ijk) {
+										double ddx = (double)dx1 - (double)dx;
+										double ddy = (double)dy1 - (double)dy;
+										double d_dydx = ddx*ddx + ddy*ddy;
+										if (d_dydx < min_d_dy_dx) {
+											min_d_dy_dx = d_dydx;
+											offset = offset2;
+										}
+									}
+								}
+							}
+						}
+
+						for (int icomp = 0; icomp < 3; icomp++) {
+							final_view[ ind + icomp*nr*nc ] += theta[ie] * ((float)pshort[ offset + icomp*nr*nc ]);
+						}
+
+						ie++;
+
+					}
+				}
+
+				/* bias term */
+				for (int icomp = 0; icomp < 3; icomp++) {
+					final_view[ind + icomp*nr*nc] += theta[(2 * NNt + 1)*(2 * NNt + 1)];
+				}
+
+			}
+		}
+	}
+
+	for (int ii = 0; ii < nr*nc * 3; ii++) {
+		if (final_view[ii] < 0)
+			final_view[ii] = 0;
+		if (final_view[ii] > (1 << BIT_DEPTH) - 1) //(pow(2, BIT_DEPTH) - 1))
+			final_view[ii] = (1 << BIT_DEPTH) - 1;// (pow(2, BIT_DEPTH) - 1);
+
+		pshort[ii] = (unsigned short)floor(final_view[ii] +0.5);
+	}
+
+	delete[](final_view);
+
+}
+
+void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
+
+	//int MIN_REG_SZ = 256;
+
+	int nregions = view0->nregions;
+	int *reg_histogram = view0->reg_histogram;
+	int *label_im = view0->label_im;
+
+	int nr = view0->nr;
+	int nc = view0->nc;
+
+	int NNt = 1;
+	int Ms = 10;
+
+	unsigned short *pshort = view0->color;
+
+	for (int ijk = 1; ijk <= nregions; ijk++) {
+
+		if ( reg_histogram[ijk] > MIN_REG_SZ ) {
+
+			std::vector< unsigned int > inds;
+			for (int ikj = 0; ikj < nr*nc; ikj++) {
+				if (label_im[ikj] == ijk) {
+					inds.push_back(ikj);
+				}
+			}
+
+			int Npp = (int)inds.size() * 3;
+			int Npp0 = (int)inds.size();
+
+			int MT = (NNt * 2 + 1)*(NNt * 2 + 1) + 1; /* number of regressors */
+
+			double *AA = new double[Npp*MT]();
+			double *Yd = new double[Npp]();
+
+			for (int ii = 0; ii < Npp; ii++) {
+				*(AA + ii + (NNt * 2 + 1)*(NNt * 2 + 1)*Npp) = 1.0;
+			}
+
+			int iiu = 0;
+
+			for (int ee = 0; ee < inds.size(); ee++) {
+
+				int ind = inds.at(ee);
+
+				int ir = ind % nr; //row
+				int ic = (ind - ir) / nr; //col
+
+				int ai = 0;
+				for (int dy_0 = -NNt; dy_0 <= NNt; dy_0++) {
+					for (int dx_0 = -NNt; dx_0 <= NNt; dx_0++) {
+
+						int RR = ir + dy_0;
+						int CC = ic + dx_0;
+
+						int dy = dy_0;
+						int dx = dx_0;
+
+						if (RR > nr - 1) {
+							dy = dy_0 - (RR - (nr - 1));
+						}
+						if (RR < 0) {
+							dy = dy_0 - RR;
+						}
+						if (CC > nc - 1) {
+							dx = dx_0 - (CC - (nc - 1));
+						}
+						if (CC < 0) {
+							dx = dx_0 - CC;
+						}
+
+						int offset = ir + dy + nr*(ic + dx);
+
+						/* get the desired Yd*/
+						if (dy == 0 && dx == 0) {
+							for (int icomp = 0; icomp < 3; icomp++) {
+								*(Yd + iiu + icomp*Npp0) = ((double)*(original_color_view + offset + icomp*nr*nc)) / ((double)(1 << BIT_DEPTH) - 1);
+							}
+						}
+
+						if (*(label_im + offset) != ijk) { // if the pixel being selected is NOT part of the region
+
+							double min_d_dy_dx = FLT_MAX;
+
+							for (int dy1_0 = -NNt; dy1_0 <= NNt; dy1_0++) {
+								for (int dx1_0 = -NNt; dx1_0 <= NNt; dx1_0++) {
+
+									int RR1 = ir + dy + dy1_0;
+									int CC1 = ic + dx + dx1_0;
+
+									int dy1 = dy1_0;
+									int dx1 = dx1_0;
+
+									if (RR1 > nr - 1) {
+										dy1 = dy1_0 - (RR1 - (nr - 1));
+									}
+									if (RR1 < 0) {
+										dy1 = dy1_0 - RR1;
+									}
+									if (CC1 > nc - 1) {
+										dx1 = dx1_0 - (CC1 - (nc - 1));
+									}
+									if (CC1 < 0) {
+										dx1 = dx1_0 - CC1;
+									}
+
+									int offset2 = ir + dy + dy1 + nr*(ic + dx + dx1);
+
+									if (*(label_im + offset2) == ijk) {
+										double ddx = (double)dx1 - (double)dx;
+										double ddy = (double)dy1 - (double)dy;
+										double d_dydx = ddx*ddx + ddy*ddy;
+										if (d_dydx < min_d_dy_dx) {
+											min_d_dy_dx = d_dydx;
+											offset = offset2;
+										}
+									}
+								}
+							}
+						}
+
+						for (int icomp = 0; icomp < 3; icomp++) {
+							/* get the regressors */
+							*(AA + iiu + icomp*Npp0 + ai*Npp) = ((double)*(pshort + offset + icomp*nr*nc)) / ((double)(1 << BIT_DEPTH) - 1);// (pow(2, BIT_DEPTH) - 1);
+						}
+						ai++;
+					}
+				}
+				iiu++;
+			}
+
+			int *PredRegr0 = new int[MT]();
+			double *PredTheta0 = new double[MT]();
+
+			int Mtrue = FastOLS_new(&AA, &Yd, PredRegr0, PredTheta0, Ms, MT, MT, Npp);
+
+			printf("Region\t%i filter:\t", ijk);
+			for (int ri = 0; ri < Ms; ri++) {
+				printf("\t%f", PredTheta0[ri]);
+			}
+			printf("\n");
+
+			std::vector< int > PredRegr;
+			std::vector< double > PredTheta;
+
+			for (int ri = 0; ri < Ms; ri++) {
+				PredRegr.push_back(PredRegr0[ri] + 1);
+				PredTheta.push_back(PredTheta0[ri]);
+			}
+
+			view0->region_Regr.push_back(PredRegr);
+			view0->region_Theta.push_back(PredTheta);
+
+			if (AA != NULL) {
+				delete[](AA);
+			}
+			if (Yd != NULL) {
+				delete[](Yd);
+			}
+
+			delete[](PredRegr0);
+			delete[](PredTheta0);
+
+		}
+
+	}
+}
 
 void applyGlobalSparseFilter(view *view0){
 

@@ -8,9 +8,9 @@
 #include <algorithm>
 
 #define NULL 0
-#define MIN_REG_SZ 1024
+#define MIN_REG_SZ 64
 #define NNt_reg 3
-#define Ms_reg 12
+#define Ms_reg 25
 
 void checkOutOfBounds(const int RR, const int CC, const int nr, const int nc, const int dy_0, const int dx_0, int &dy, int &dx ) {
 
@@ -199,6 +199,31 @@ void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
 
 	unsigned short *pshort = view0->color;
 
+	//std::vector< std::pair< int, int > > disparity_regions;
+
+	//for (int ijk = 1; ijk <= nregions; ijk++) {
+
+	//	if (reg_histogram[ijk] > MIN_REG_SZ) {
+
+	//		/*get disparity value*/
+	//		int disparity_value = 0;
+	//		for (int ikj = 0; ikj < nr*nc; ikj++) {
+	//			if (label_im[ikj] == ijk) {
+	//				disparity_value = label_im[ikj];
+	//				break;
+	//			}
+	//		}
+
+	//		std::pair< int, int > tmp;
+	//		tmp.first = disparity_value;
+	//		tmp.second = ijk;
+
+	//		disparity_regions.push_back(tmp);
+	//	}
+	//}
+
+	//std::sort(disparity_regions.begin(), disparity_regions.end());
+
 	for (int ijk = 1; ijk <= nregions; ijk++) {
 
 		if ( reg_histogram[ijk] > MIN_REG_SZ ) {
@@ -219,7 +244,7 @@ void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
 			double *Yd = new double[Npp]();
 
 			for (int ii = 0; ii < Npp; ii++) {
-				*(AA + ii + (NNt * 2 + 1)*(NNt * 2 + 1)*Npp) = 1.0;
+				*(AA + ii + (NNt * 2 + 1)*(NNt * 2 + 1)*Npp) = 1.0 / ((double)(1 << BIT_DEPTH) - 1);
 			}
 
 			int iiu = 0;
@@ -393,7 +418,7 @@ void getGlobalSparseFilter(view *view0, unsigned short *original_color_view)
 	double *Yd = new double[Npp]();
 
 	for (int ii = 0; ii < Npp; ii++)
-		*(AA + ii + (NNt * 2 + 1)*(NNt * 2 + 1)*Npp) = 1.0;
+		*(AA + ii + (NNt * 2 + 1)*(NNt * 2 + 1)*Npp) = 1.0 / ((double)(1 << BIT_DEPTH) - 1);
 
 	int iiu = 0;
 

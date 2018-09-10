@@ -69,6 +69,9 @@
     <ClInclude Include="..\..\source\connected_components.hh">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\source\motioncompensation.hh">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\predictdepth.cpp">
@@ -117,6 +120,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\source\connected_components.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\motioncompensation.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

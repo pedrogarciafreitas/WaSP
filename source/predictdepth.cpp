@@ -4,9 +4,11 @@
 #include "ppm.hh"
 #include "inpainting.hh"
 #include "warping.hh"
+#include "motioncompensation.hh"
 
 #include <ctime>
 #include <vector>
+#include <iostream>
 
 void predictDepth(view* SAI, view *LF)
 {
@@ -68,5 +70,15 @@ void predictDepth(view* SAI, view *LF)
 	delete[](warped_color_views_0_N);
 	delete[](warped_depth_views_0_N);
 	delete[](DispTargs_0_N);
+
+	/* median filter depth */
+	if (MEDFILT_DEPTH) {
+		unsigned short *tmp_depth = new unsigned short[SAI->nr*SAI->nc]();
+		int startt = clock();
+		medfilt2D(SAI->depth, tmp_depth, MEDFILT_DEPTH_SZ, SAI->nr, SAI->nc);
+		std::cout << "time elapsed in depth median filtering\t" << (float)((int)clock() - startt) / CLOCKS_PER_SEC << "\n";
+		memcpy(SAI->depth, tmp_depth, sizeof(unsigned short)*SAI->nr*SAI->nc);
+		delete[](tmp_depth);
+	}
 
 }

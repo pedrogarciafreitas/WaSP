@@ -4,7 +4,11 @@
 #include <stdint.h>
 #include <vector>
 
-#define MEDFILT_DEPTH true
+struct MV_REGION {
+	int iR;
+	int dy;
+	int dx;
+};
 
 struct view{
 
@@ -52,7 +56,7 @@ struct view{
 	int has_segmentation;
 	int maxL; // number of regions in segmentation
 
-	int ****region_displacements; /* region displacement vectors [iar][iac][iR][xy], e.g., [13][13][25][2], for 13x13 angular views with 25 regions for segmentation */
+	//int ****region_displacements; /* region displacement vectors [iar][iac][iR][xy], e.g., [13][13][25][2], for 13x13 angular views with 25 regions for segmentation */
 
 	char path_input_pgm[1024], path_input_ppm[1024], path_input_seg[1024];
 	char path_out_pgm[1024], path_out_ppm[1024];
@@ -73,7 +77,7 @@ struct view{
 	bool has_color_references, has_depth_references;
 	//bool has_min_inv_depth;
 
-	bool has_x_displacement, has_y_displacement;
+	bool has_x_displacement, has_y_displacement; /* camera displacement information flag */
 
 
 	/* for regions */
@@ -83,6 +87,10 @@ struct view{
 
 	std::vector< std::vector< int > > region_Regr;
 	std::vector< std::vector< double > > region_Theta;
+
+	std::vector< int > mv_regions;
+
+	std::vector< std::pair< int, std::vector< MV_REGION > > > mv_views;
 
 };
 

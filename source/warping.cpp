@@ -1,8 +1,36 @@
 #include "warping.hh"
 #include "bitdepth.hh"
+#include "motioncompensation.hh"
 
 #include <cstdlib>
 #include <cmath>
+
+
+void warpSubscripts_from_View0_to_View1_int(view *view0, view *view1, int iy, int ix, int &iynew, int &ixnew) {
+
+	float ddy = view0->y - view1->y;
+	float ddx = view0->x - view1->x;
+
+	unsigned short *DD1 = view0->depth;
+
+	int ij = view0->nr*ix + iy;
+
+	if (ij >= 0 && ij < view0->nr*view0->nc) {
+
+		float disp = ((float)DD1[ij] - (float)view0->min_inv_d) / (float)(1 << D_DEPTH);
+		float DM_COL = disp*ddx;
+		float DM_ROW = -disp*ddy;
+
+		ixnew = ix + (int)floor(DM_COL + 0.5);
+		iynew = iy + (int)floor(DM_ROW + 0.5);
+
+	}
+	else {
+		ixnew = -1;
+		iynew = -1;
+	}
+
+}
 
 void warpView0_to_View1(view *view0, view *view1, unsigned short *&warpedColor, unsigned short *&warpedDepth, float *&DispTarg)
 {
@@ -23,30 +51,48 @@ void warpView0_to_View1(view *view0, view *view1, unsigned short *&warpedColor, 
 		DispTarg[ij] = INIT_DISPARITY_VALUE;
 	}
 
+	float *DM_COL_MV = new float[view0->nr*view0->nc]();
+	float *DM_ROW_MV = new float[view0->nr*view0->nc]();
+
+	if (MOTION_VECTORS) {
+
+		getMotionVectorsView0_to_View1(view0, view1);
+
+		int i_v = findMVIndex(view0, view1);
+
+		if (i_v > -1) {
+
+			std::vector<MV_REGION> mv_regions_final = view0->mv_views.at(i_v).second;
+
+			for (int ij = 0; ij < view0->nr*view0->nc; ij++) {
+				int ik = *(view0->label_im + ij);
+				for (int iR = 0; iR < mv_regions_final.size(); iR++) {
+					if (mv_regions_final.at(iR).iR == ik) {
+						*(DM_COL_MV + ij) += mv_regions_final.at(iR).dx;
+						*(DM_ROW_MV + ij) += mv_regions_final.at(iR).dy;
+						break;
+					}
+				}
+			}
+
+		}
+	}
+
 	for (int ij = 0; ij < view0->nr*view0->nc; ij++)
 	{
 
-
 		float disp = ((float)DD1[ij] - (float)view0->min_inv_d) / (float)(1 << D_DEPTH);// pow(2, D_DEPTH);
-		float DM_COL = disp*ddx;
-		float DM_ROW = -disp*ddy;
-		//float disp0 = abs(DM_COL) + abs(DM_ROW);
+		float DM_COL = disp*ddx + *(DM_COL_MV+ij);
+		float DM_ROW = -disp*ddy + *(DM_ROW_MV + ij);
 
-		//if (view0->DM_ROW != NULL && view0->DM_COL != NULL)
-		//{
-		//	DM_COL = view0->DM_COL[ij];
-		//	DM_ROW = view0->DM_ROW[ij];
-		//	disp0 = 1 / (abs(DM_COL) + abs(DM_ROW)); /*for lenslet large disparity means further away ... */
-		//}
+		int iy = ij % view0->nr; //row
+		int ix = (ij - iy) / view0->nr; //col
 
-		int ix = ij % view0->nr; //row
-		int iy = (ij - ix) / view0->nr; //col
+		int ixnew = ix + (int)floor(DM_COL + 0.5);
+		int iynew = iy + (int)floor(DM_ROW + 0.5);
 
-		int iynew = iy + (int)floor(DM_COL + 0.5);
-		int ixnew = ix + (int)floor(DM_ROW + 0.5);
-
-		if (iynew >= 0 && iynew < view0->nc && ixnew >= 0 && ixnew < view0->nr) {
-			int indnew = ixnew + iynew*view0->nr;
+		if (ixnew >= 0 && ixnew < view0->nc && iynew >= 0 && iynew < view0->nr) {
+			int indnew = iynew + ixnew*view0->nr;
 			if (DispTarg[indnew] < disp) { /* Bug fix from VM1.0. Since we use also negative disparity,
 										   but the largest positive value still represents nearest pixel,
 										   we should compare against disp not disp0.*/

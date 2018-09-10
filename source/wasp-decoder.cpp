@@ -194,16 +194,6 @@ int main(int argc, char** argv) {
 
 		}
 
-		/* median filter depth */
-		if (MEDFILT_DEPTH) {
-			unsigned short *tmp_depth = new unsigned short[SAI->nr*SAI->nc]();
-			int startt = clock();
-			medfilt2D(SAI->depth, tmp_depth, 3, SAI->nr, SAI->nc);
-			std::cout << "time elapsed in depth median filtering\t" << (int)clock() - startt << "\n";
-			memcpy(SAI->depth, tmp_depth, sizeof(unsigned short)*SAI->nr*SAI->nc);
-			delete[](tmp_depth);
-		}
-
 		int QD = 100;
 
 		int *tmp_d = new int[SAI->nr*SAI->nc]();

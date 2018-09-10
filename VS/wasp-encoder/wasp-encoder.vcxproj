@@ -124,6 +124,7 @@
     <ClInclude Include="..\..\source\fastols.hh" />
     <ClInclude Include="..\..\source\fileaux.hh" />
     <ClInclude Include="..\..\source\inpainting.hh" />
+    <ClInclude Include="..\..\source\kmeans.hh" />
     <ClInclude Include="..\..\source\medianfilter.hh" />
     <ClInclude Include="..\..\source\merging.hh" />
     <ClInclude Include="..\..\source\minconf.hh" />
@@ -143,6 +144,7 @@
     <ClCompile Include="..\..\source\fastols.cpp" />
     <ClCompile Include="..\..\source\fileaux.cpp" />
     <ClCompile Include="..\..\source\inpainting.cpp" />
+    <ClCompile Include="..\..\source\kmeans.cpp" />
     <ClCompile Include="..\..\source\merging.cpp" />
     <ClCompile Include="..\..\source\minconf.cpp" />
     <ClCompile Include="..\..\source\motioncompensation.cpp" />

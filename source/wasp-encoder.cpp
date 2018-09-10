@@ -24,6 +24,7 @@
 #include "connected_components.hh"
 #include "fastols.hh"
 #include "motioncompensation.hh"
+#include "kmeans.hh"
 
 
 #define USE_difftest_ng false
@@ -306,12 +307,14 @@ int main(int argc, char** argv) {
 			SAI->has_depth_residual = true;
 		}
 
-		int QD = 800;
+		int QD = 150;
 
 		int *tmp_d = new int[SAI->nr*SAI->nc]();
 		for (int ii = 0; ii < SAI->nr*SAI->nc; ii++) {
-			*(tmp_d + ii) = (int)(*(SAI->depth + ii)) / QD;
+			*(tmp_d + ii) = (int)(*(SAI->depth + ii));// / QD;
 		}
+
+		getKmeansQuantized(8, tmp_d, SAI->nr*SAI->nc, 32); /*inplace assignment to tmp_d*/
 
 		int nregions = 0;
 		int *reg_histogram = 0;
@@ -320,6 +323,10 @@ int main(int argc, char** argv) {
 		SAI->label_im = label_im;
 		SAI->nregions = nregions;
 		SAI->reg_histogram = reg_histogram;
+
+		if (MOTION_VECTORS) {
+			sortRegionsBySize(SAI);
+		}
 
 		unsigned short *labels = new unsigned short[SAI->nr*SAI->nc]();
 		for (int ii = 0; ii < SAI->nr*SAI->nc; ii++) {
@@ -330,26 +337,6 @@ int main(int argc, char** argv) {
 		sprintf(labels_file, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_labels.pgm");
 		aux_write16PGMPPM(labels_file, SAI->nc, SAI->nr, 1, labels);
 
-		/* motion vectors ? */
-
-		if (MOTION_VECTORS) {
-
-			sortRegionsBySize(SAI);
-
-			/*if (SAI->mv_regions.size() > 0) {
-
-				for (int eij = 0; eij < n_views_total; eij++) {
-
-					if (eij != ii) {
-
-						getMotionVectorsView0_to_View1(SAI, LF + eij);
-
-					}
-				}
-
-			}*/
-
-		}
 
 		delete[](labels);
 		delete[](tmp_d);

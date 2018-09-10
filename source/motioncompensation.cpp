@@ -180,11 +180,13 @@ void getMotionVectorsView0_to_View1(view *view0, view *view1) {
 
 		view0->mv_views.push_back(tmp_mv_reg);
 
-		for (int iR = 0; iR < mv_regions.size(); iR++) {
+		/*for (int iR = 0; iR < mv_regions.size(); iR++) {
 			printf("iR=%i\tdy=%i\tdx=%i\n", mv_regions.at(iR).iR, mv_regions.at(iR).dy, mv_regions.at(iR).dx);
-		}
+		}*/
 
 	}
+
+	printf("Regions found: %i\n", static_cast<int>(mv_regions.size()));
 
 	for (int ik = 0; ik < nregions; ik++) {
 		for (int isr = 0; isr < search_radius * 2 + 1; isr++) {

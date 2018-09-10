@@ -10,7 +10,7 @@ void holefilling(unsigned short *pshort, const int ncomps, const int nr, const i
 	while (holes.size() > 0) {
 		holefilling_alg(holes, pshort, ncomps, nr, nc, maskval);
 		holes = getHoles(pshort, nr, nc, maskval, ncomps);
-		printf("holefilling iteration:\t%i\t n:%i\n", iter++, holes.size());
+		printf("holefilling iteration:\t%i\t n:%i\n", iter++, static_cast<int>(holes.size()));
 	}
 }
 

@@ -22,6 +22,8 @@
 #include "predictdepth.hh"
 #include "codestream.hh"
 #include "connected_components.hh"
+#include "kmeans.hh"
+#include "motioncompensation.hh"
 
 #define SAVE_PARTIAL_WARPED_VIEWS false
 
@@ -78,6 +80,8 @@ int main(int argc, char** argv) {
 		SAI->nr = _NR;
 		SAI->nc = _NC;
 
+		SAI->i_order = ii;
+
 		if (MINIMUM_DEPTH > 0) {
 			SAI->min_inv_d = (int)MINIMUM_DEPTH;
 		}
@@ -97,7 +101,6 @@ int main(int argc, char** argv) {
 		/* Get color and disparity residuals */
 		if (SAI->has_color_residual)
 		{
-			//n_bytes_residual += (int)fread(&n_bytes_color_residual, sizeof(int), 1, input_LF)* sizeof(int);
 			if (SAI->yuv_transform && YUV_TRANSFORM) {
 
 				char pgm_residual_Y_path[1024];
@@ -149,9 +152,12 @@ int main(int argc, char** argv) {
 			}
 		}
 
-		if (SAI->has_depth_residual) { /* residual depth if needed */
+		/* forward warp depth */
+		if (SAI->has_depth_references) {
+			predictDepth(SAI, LF);
+		}
 
-									   //n_bytes_residual =+ (int)fread(&n_bytes_depth_residual, sizeof(int), 1, input_LF)* sizeof(int);
+		if (SAI->has_depth_residual) { /* residual depth if needed */
 
 			int ncomp1 = 0; /* temporary to hold the number of components */
 
@@ -165,45 +171,25 @@ int main(int argc, char** argv) {
 
 			readResidualFromDisk(jp2_residual_depth_path_jp2, n_bytes_residual, input_LF, JP2_dict);
 
-			//decodeResidualJP2(SAI->depth, kdu_expand_path, jp2_residual_depth_path_jp2, pgm_residual_depth_path, ncomp1, 0, (1 << 16) - 1, 1);
-
-		}
-
-		/* forward warp depth */
-		if (SAI->has_depth_references) {
-			predictDepth(SAI, LF);
-		}
-
-		if (SAI->has_depth_residual) { /* residual depth if needed */
-
-									   //n_bytes_residual =+ (int)fread(&n_bytes_depth_residual, sizeof(int), 1, input_LF)* sizeof(int);
-
-			int ncomp1 = 0; /* temporary to hold the number of components */
-
-			char pgm_residual_depth_path[1024];
-
-			char jp2_residual_depth_path_jp2[1024];
-
-			sprintf(pgm_residual_depth_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.pgm");
-
-			sprintf(jp2_residual_depth_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.jp2");
-
-			//readResidualFromDisk(jp2_residual_depth_path_jp2, n_bytes_residual, input_LF, JP2_dict);
-
 			decodeResidualJP2(SAI->depth, kdu_expand_path, jp2_residual_depth_path_jp2, pgm_residual_depth_path, ncomp1, 0, (1 << 16) - 1, 1);
 
 		}
 
-		int QD = 100;
 
 		int *tmp_d = new int[SAI->nr*SAI->nc]();
 		for (int ii = 0; ii < SAI->nr*SAI->nc; ii++) {
-			*(tmp_d + ii) = (int)(*(SAI->depth + ii)) / QD;
+			*(tmp_d + ii) = (int)(*(SAI->depth + ii));// / QD;
 		}
+
+		getKmeansQuantized(K_MEANS_CLUSTERS, tmp_d, SAI->nr*SAI->nc, K_MEANS_ITERATIONS); /*inplace assignment to tmp_d*/
 
 		int nregions = 0;
 		int *reg_histogram = 0;
 		int *label_im = get_labels(tmp_d, SAI->nr, SAI->nc, nregions, reg_histogram);
+
+		SAI->label_im = label_im;
+		SAI->nregions = nregions;
+		SAI->reg_histogram = reg_histogram;
 
 		unsigned short *labels = new unsigned short[SAI->nr*SAI->nc]();
 		for (int ii = 0; ii < SAI->nr*SAI->nc; ii++) {
@@ -214,8 +200,24 @@ int main(int argc, char** argv) {
 		sprintf(labels_file, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_labels.pgm");
 		aux_write16PGMPPM(labels_file, SAI->nc, SAI->nr, 1, labels);
 
+		char tmp_d_file[1024];
+		sprintf(tmp_d_file, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_kmeans_disparity.int32");
+		FILE *tmpfile_d;
+		tmpfile_d = fopen(tmp_d_file, "wb");
+		fwrite(tmp_d, sizeof(int), SAI->nr*SAI->nc, tmpfile_d);
+		fclose(tmpfile_d);
+
+		sprintf(SAI->path_label_im, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_im_labels.int32");
+		FILE *tmpfile_im_labels;
+		tmpfile_im_labels = fopen(SAI->path_label_im, "wb");
+		fwrite(SAI->label_im, sizeof(int), SAI->nr*SAI->nc, tmpfile_im_labels);
+		fclose(tmpfile_im_labels);
+
+		if (MOTION_VECTORS) {
+			sortRegionsBySize(SAI);
+		}
+
 		delete[](labels);
-		delete[](label_im);
 		delete[](tmp_d);
 
 		/* forward warp color */
@@ -301,6 +303,11 @@ int main(int argc, char** argv) {
 		if (SAI->use_global_sparse)
 		{
 			applyGlobalSparseFilter(SAI);
+		}
+
+		if (SAI->use_region_sparse) 
+		{
+			applyRegionSparseFilter(SAI);
 		}
 
 		/* prediction part OVER, move on to residual */

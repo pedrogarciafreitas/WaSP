@@ -124,9 +124,11 @@
     <ClInclude Include="..\..\source\fastols.hh" />
     <ClInclude Include="..\..\source\fileaux.hh" />
     <ClInclude Include="..\..\source\inpainting.hh" />
+    <ClInclude Include="..\..\source\kmeans.hh" />
     <ClInclude Include="..\..\source\medianfilter.hh" />
     <ClInclude Include="..\..\source\merging.hh" />
     <ClInclude Include="..\..\source\minconf.hh" />
+    <ClInclude Include="..\..\source\motioncompensation.hh" />
     <ClInclude Include="..\..\source\ppm.hh" />
     <ClInclude Include="..\..\source\predictdepth.hh" />
     <ClInclude Include="..\..\source\psnr.hh" />
@@ -142,8 +144,10 @@
     <ClCompile Include="..\..\source\fastols.cpp" />
     <ClCompile Include="..\..\source\fileaux.cpp" />
     <ClCompile Include="..\..\source\inpainting.cpp" />
+    <ClCompile Include="..\..\source\kmeans.cpp" />
     <ClCompile Include="..\..\source\merging.cpp" />
     <ClCompile Include="..\..\source\minconf.cpp" />
+    <ClCompile Include="..\..\source\motioncompensation.cpp" />
     <ClCompile Include="..\..\source\ppm.cpp" />
     <ClCompile Include="..\..\source\predictdepth.cpp" />
     <ClCompile Include="..\..\source\psnr.cpp" />

@@ -3,6 +3,7 @@
 #include <cmath>
 
 void assignClusters(const int K_clusters, double *centroids, double *dvalues, int *quantized, const int npoints) {
+
 	for (int ii = 0; ii < npoints; ii++) {
 		double minval = DBL_MAX;
 		int cluster_id = -1;
@@ -19,6 +20,7 @@ void assignClusters(const int K_clusters, double *centroids, double *dvalues, in
 }
 
 void updateValues(const int K_clusters, double *centroids, double *dvalues, int *quantized, const int npoints) {
+
 	for (int ii = 0; ii < npoints; ii++) {
 		dvalues[ii] = centroids[quantized[ii]];
 	}
@@ -27,7 +29,7 @@ void updateValues(const int K_clusters, double *centroids, double *dvalues, int 
 bool updateClusters(const int K_clusters, double *centroids, double *dvalues, int *quantized, const int npoints) {
 	
 	bool converge = true;
-	
+
 	for (int jj = 0; jj < K_clusters; jj++) {
 		double sum = 0;
 		int n = 0;
@@ -39,9 +41,9 @@ bool updateClusters(const int K_clusters, double *centroids, double *dvalues, in
 		}
 		
 		if (n > 0) {
-			double new_centroid = sum / static_cast<double>(n);
+			double new_centroid = floor( (sum / static_cast<double>(n)) + 0.5 );
 
-			if (abs(centroids[jj] - new_centroid) > 0.25) {
+			if ( abs(centroids[jj] - new_centroid) > 0.1 ) {
 				converge = false;
 			}
 
@@ -57,23 +59,23 @@ bool updateClusters(const int K_clusters, double *centroids, double *dvalues, in
 
 void getKmeansQuantized(const int K_clusters, int *values, const int npoints, const int iterations) {
 
-	int min_value = INT_MAX;
-	int max_value = -INT_MIN;
+	double min_value = DBL_MAX;
+	double max_value = DBL_MIN;
 
 	double *dvalues = new double[npoints]();
 
 	for (int ii = 0; ii < npoints; ii++) {
-		min_value = values[ii] < min_value ? values[ii] : min_value;
-		max_value = values[ii] > max_value ? values[ii] : max_value;
+		min_value = values[ii] < min_value ? static_cast<double>( values[ii] ) : min_value;
+		max_value = values[ii] > max_value ? static_cast<double>( values[ii] ) : max_value;
 
 		dvalues[ii] = static_cast<double>( values[ii] );
 	}
 
-	int delta = (max_value - min_value) / K_clusters;
+	double delta = (max_value - min_value) / static_cast<double>( K_clusters );
 
 	double *centroids = new double[K_clusters]();
 	for (int jj = 0; jj < K_clusters; jj++) {
-		centroids[jj] = min_value + jj*delta;
+		centroids[jj] = floor( min_value + jj*delta + 0.5 );
 	}
 
 	int n_iter = 1;
@@ -95,7 +97,7 @@ void getKmeansQuantized(const int K_clusters, int *values, const int npoints, co
 	updateValues(K_clusters, centroids, dvalues, quantized, npoints);
 
 	for (int ii = 0; ii < npoints; ii++) {
-		values[ii] = static_cast<int>(dvalues[ii]);
+		values[ii] = static_cast<int>( floor(dvalues[ii] + 0.5 ) );
 	}
 	
 	delete[](dvalues);

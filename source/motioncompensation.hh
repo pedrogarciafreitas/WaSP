@@ -7,6 +7,7 @@
 
 #include "view.hh"
 
+void readLabelIm(view *view0);
 int findMVIndex(view *view0, view* view1);
 void sortRegionsBySize(view *view0);
 void getMotionVectorsView0_to_View1(view *view0, view *view1);

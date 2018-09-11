@@ -5,9 +5,9 @@
 #include <vector>
 
 struct MV_REGION {
-	int iR;
-	int dy;
-	int dx;
+	unsigned int iR;
+	signed char dy;
+	signed char dx;
 };
 
 struct view{
@@ -56,14 +56,9 @@ struct view{
 	int has_segmentation;
 	int maxL; // number of regions in segmentation
 
-	//int ****region_displacements; /* region displacement vectors [iar][iac][iR][xy], e.g., [13][13][25][2], for 13x13 angular views with 25 regions for segmentation */
-
 	char path_input_pgm[1024], path_input_ppm[1024], path_input_seg[1024];
 	char path_out_pgm[1024], path_out_ppm[1024];
-
-	//char path_input_Y_pgm[1024], path_out_Y_pgm[1024];
-	//char path_input_Cb_pgm[1024], path_out_Cb_pgm[1024];
-	//char path_input_Cr_pgm[1024], path_out_Cr_pgm[1024];
+	char path_label_im[1024];
 
 	float *DM_ROW, *DM_COL; /* for lenslet with region displacement vectors */
 
@@ -75,22 +70,23 @@ struct view{
 
 	bool has_color_residual, has_depth_residual, use_global_sparse;
 	bool has_color_references, has_depth_references;
-	//bool has_min_inv_depth;
 
 	bool has_x_displacement, has_y_displacement; /* camera displacement information flag */
-
 
 	/* for regions */
 	int *label_im;
 	int nregions;
 	int *reg_histogram;
 
-	std::vector< std::vector< int > > region_Regr;
-	std::vector< std::vector< double > > region_Theta;
+	bool use_region_sparse;
+	bool use_motion_vectors;
+
+	std::vector< std::vector< unsigned char > > region_Regr;
+	std::vector< std::vector< int32_t > > region_Theta;
 
 	std::vector< int > mv_regions;
 
-	std::vector< std::pair< int, std::vector< MV_REGION > > > mv_views;
+	std::vector< std::pair< unsigned short, std::vector< MV_REGION > > > mv_views; /* first one is view index, second contains vector of regions for that view */
 
 };
 

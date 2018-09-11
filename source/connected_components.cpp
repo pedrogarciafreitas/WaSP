@@ -50,12 +50,13 @@ int *get_labels(int *img, const int nr, const int nc, int &nregions, int *&reg_h
 	delete[](gr);
 	delete[](gSR);
 
-	nregions = 0;
+	nregions = INT32_MIN;
 
 	reg_histogram = new int[MAXREG]();
 
+#pragma omp parallel for
 	for (int ii = 0; ii < nr*nc; ii++) {
-		nregions = *(label_im + ii) > nregions ? nregions + 1 : nregions;
+		nregions = *(label_im + ii) > nregions ? *(label_im + ii)+1 : nregions;
 
 		if (*(label_im + ii) < MAXREG) {
 			reg_histogram[*(label_im + ii)]++;
@@ -69,25 +70,27 @@ int *get_labels(int *img, const int nr, const int nc, int &nregions, int *&reg_h
 
 }
 
-void get_gSR_matrix(int **gr, int **gSR, const int nr, const int nc){
+void get_gSR_matrix(int **gr, int **gSR, const int nr, const int nc) {
 
-	for (int ir = 0; ir<nr; ir++)
-		for (int ic = 0; ic<nc; ic++)
+#pragma omp parallel for
+	for (int ir = 0; ir < nr; ir++) {
+		for (int ic = 0; ic < nc; ic++)
 		{
-			if (ic>0)
+			if (ic > 0)
 				if (gr[2 * ir + 3][2 * (ic - 1) + 3] != gr[2 * ir + 3][2 * ic + 3])
 				{
 					gr[2 * ir + 3][2 * ic + 2] = 1;
 					gSR[ir][ic] = 1;
 				}
 
-			if (ir>0)
+			if (ir > 0)
 				if (gr[2 * (ir - 1) + 3][2 * ic + 3] != gr[2 * ir + 3][2 * ic + 3])
 				{
 					gr[2 * ir + 2][2 * ic + 3] = 1;
 					gSR[ir][ic] += 2;
 				}
 		}
+	}
 
 	for (int ii = 0; ii < nr; ii++) {
 		for (int jj = 0; jj < nc; jj++) {

@@ -4,49 +4,89 @@
 
 #include <iostream>
 
-//void packSparseMask(const int Ms, const int NNt, unsigned char *sparse_mask, int32_t *packed) {
-//
-//	int N = floor( (float)((2*NNt+1)*(2*NNt+1)+1) / 32.0 + 0.5);
-//
-//	packed = new int32_t[N]();
-//
-//	for (int ij = 0; ij < Ms; ij++) {
-//
-//		unsigned char value = sparse_mask[ij];
-//
-//		if ( value > 0) {
-//
-//			int offset = (value-1) / 30;
-//
-//			packed[offset] = packed[offset] | 1 << ((int32_t)sparse_mask[ij]- offset*31 );
-//
-//		}
-//	}
-//
-//}
-//
-//void unpackSparseMask(const int Ms, const int NNt, unsigned char *sparse_mask, int32_t *packed) {
-//
-//	int N = floor((float)((2 * NNt + 1)*(2 * NNt + 1) + 1) / 32.0 + 0.5);
-//
-//	packed = new int32_t[N]();
-//
-//	int ik = 0;
-//
-//	for (int M = 0; M < N; M++) {
-//
-//		int32_t p32 = packed[N];
-//
-//		for (int ij = 0; ij < 32; ij++) {
-//
-//			if ((p32 & (1 << ij - 31 * N)) > 0) {
-//				sparse_mask[ik++] = ij + 32*N;
-//
-//			}
-//		}
-//	}
-//
-//}
+void readSparseFromBitstream(int &n_bytes_prediction, FILE *input_LF, int &NNt, int &Ms, unsigned char *&sparse_mask, int32_t *&sparse_weights, const bool regionsparse){
+
+	if ( !regionsparse ) {
+
+		unsigned char tmpNNt = 0;
+		unsigned char tmpMs = 0;
+
+		n_bytes_prediction += (int)fread(&tmpNNt, sizeof(unsigned char), 1, input_LF) * sizeof(unsigned char);
+		n_bytes_prediction += (int)fread(&tmpMs, sizeof(unsigned char), 1, input_LF) * sizeof(unsigned char);
+
+		NNt = (int)tmpNNt;
+		Ms = (int)tmpMs;
+
+	}
+
+	sparse_weights = new int32_t[Ms]();
+	sparse_mask = new unsigned char[Ms]();
+
+	n_bytes_prediction += (int)fread(sparse_weights, sizeof(int32_t), Ms, input_LF) * sizeof(int32_t);
+
+	int32_t sparse_mask_binary[2];
+
+	n_bytes_prediction += (int)fread(&sparse_mask_binary[0], sizeof(int32_t), 1, input_LF) * sizeof(int32_t);
+	n_bytes_prediction += (int)fread(&sparse_mask_binary[1], sizeof(int32_t), 1, input_LF) * sizeof(int32_t);
+
+	unpackSparseMask(sparse_mask_binary, sparse_mask);
+}
+
+void writeSparseToBitstream(int &n_bytes_prediction,FILE *output_LF_file, const int Ms, unsigned char *sparse_mask, const int NNt, int32_t *sparse_weights, const bool regionsparse) {
+
+	int32_t sparse_mask_binary[2] = { 0,0 };
+
+	packSparseMask(Ms, sparse_mask, sparse_mask_binary);
+
+	if (!regionsparse) {
+
+		unsigned char tmpNNt = (unsigned char)NNt;
+		unsigned char tmpMs = (unsigned char)Ms;
+
+		n_bytes_prediction += (int)fwrite(&tmpNNt, sizeof(unsigned char), 1, output_LF_file) * sizeof(unsigned char);
+		n_bytes_prediction += (int)fwrite(&tmpMs, sizeof(unsigned char), 1, output_LF_file) * sizeof(unsigned char);
+	}
+
+	n_bytes_prediction += (int)fwrite(sparse_weights, sizeof(int32_t), Ms, output_LF_file) * sizeof(int32_t);
+	n_bytes_prediction += (int)fwrite(&sparse_mask_binary[0], sizeof(int32_t), 1, output_LF_file) * sizeof(int32_t);
+	n_bytes_prediction += (int)fwrite(&sparse_mask_binary[1], sizeof(int32_t), 1, output_LF_file) * sizeof(int32_t);
+
+}
+
+void packSparseMask(const int Ms, const unsigned char *sparse_mask, int32_t *sparse_mask_binary) {
+
+	for (int ij = 0; ij < Ms; ij++) {
+
+		if (sparse_mask[ij] > 0) {
+
+			if (sparse_mask[ij] <= 30) {
+				sparse_mask_binary[0] = sparse_mask_binary[0] | 1 << ((int32_t)sparse_mask[ij]); // note: regressor indexing starts from 1
+			}
+			else {
+				sparse_mask_binary[1] = sparse_mask_binary[1] | 1 << ((int32_t)sparse_mask[ij] - 31);
+			}
+
+		}
+
+	}
+}
+
+void unpackSparseMask(int32_t *sparse_mask_binary, unsigned char *sparse_mask) {
+	int ik = 0;
+
+	for (int ij = 0; ij < 64; ij++) {
+		if (ij <= 30) {
+			if ((sparse_mask_binary[0] & (1 << ij))>0) {
+				sparse_mask[ik] = ij; ik++;
+			}
+		}
+		else {
+			if ((sparse_mask_binary[1] & (1 << (ij - 31)))>0) {
+				sparse_mask[ik] = ij; ik++;
+			}
+		}
+	}
+}
 
 void viewHeaderToCodestream(int &n_bytes_prediction, view *SAI, FILE *output_LF_file, const int yuv_transform_s) {
 
@@ -99,37 +139,47 @@ void viewHeaderToCodestream(int &n_bytes_prediction, view *SAI, FILE *output_LF_
 
 	if ( SAI->use_global_sparse ) {
 
-		int32_t sparse_mask_binary_p1 = 0;
-		int32_t sparse_mask_binary_p2 = 0;
+		writeSparseToBitstream(n_bytes_prediction, output_LF_file, SAI->Ms, SAI->sparse_mask, SAI->NNt, SAI->sparse_weights, false);
 
-		for (int ij = 0; ij < SAI->Ms; ij++) {
+	}
 
-			if (SAI->sparse_mask[ij] > 0) {
+	if (SAI->use_region_sparse) {
 
-				if (SAI->sparse_mask[ij]  <= 30) {
-					sparse_mask_binary_p1 = sparse_mask_binary_p1 | 1 << ((int32_t)SAI->sparse_mask[ij]); // note: regressor indexing starts from 1
-				}
-				else {
-					sparse_mask_binary_p2 = sparse_mask_binary_p2 | 1 << ((int32_t)SAI->sparse_mask[ij] - 31);
-				}
+		unsigned int nregions_sparse = static_cast<unsigned int>( SAI->region_Regr.size() );
+
+		n_bytes_prediction += (int)fwrite(&nregions_sparse, sizeof(unsigned int), 1, output_LF_file) * sizeof(unsigned int);
+
+		for (unsigned int ii = 0; ii < nregions_sparse; ii++) {
+
+			writeSparseToBitstream(n_bytes_prediction, output_LF_file, SAI->Ms, SAI->region_Regr.at(ii).data(), SAI->NNt, SAI->region_Theta.at(ii).data(), true);
+
+		}
+
+	}
+
+	if (SAI->use_motion_vectors) {
+
+		unsigned short n_views = static_cast<unsigned short>( SAI->mv_views.size() );
+
+		n_bytes_prediction += (int)fwrite(&n_views, sizeof(unsigned short), 1, output_LF_file) * sizeof(unsigned short);
+
+		for (int jj = 0; jj < n_views; jj++) {
+
+			unsigned int n_regions = static_cast<unsigned int>( SAI->mv_views.at(jj).second.size() );
+
+			n_bytes_prediction += (int)fwrite(&n_regions, sizeof(unsigned int), 1, output_LF_file) * sizeof(unsigned int);
+
+			n_bytes_prediction += (int)fwrite(&SAI->mv_views.at(jj).first, sizeof(int), 1, output_LF_file) * sizeof(int);
+
+			for (unsigned int ik = 0; ik < n_regions; ik++) {
+
+				n_bytes_prediction += (int)fwrite(&SAI->mv_views.at(jj).second.at(ik), sizeof(MV_REGION), 1, output_LF_file) * sizeof(MV_REGION);
 
 			}
 
 		}
 
-		unsigned char tmpNNt = (unsigned char)SAI->NNt;
-		unsigned char tmpMs = (unsigned char)SAI->Ms;
-
-		n_bytes_prediction += (int)fwrite(&tmpNNt, sizeof(unsigned char), 1, output_LF_file) * sizeof(unsigned char);
-		n_bytes_prediction += (int)fwrite(&tmpMs, sizeof(unsigned char), 1, output_LF_file) * sizeof(unsigned char);
-
-		n_bytes_prediction += (int)fwrite(SAI->sparse_weights, sizeof(int32_t), SAI->Ms, output_LF_file) * sizeof(int32_t);
-		n_bytes_prediction += (int)fwrite(&sparse_mask_binary_p1, sizeof(int32_t), 1, output_LF_file) * sizeof(int32_t);
-		n_bytes_prediction += (int)fwrite(&sparse_mask_binary_p2, sizeof(int32_t), 1, output_LF_file) * sizeof(int32_t);
-
 	}
-
-
 
 	return;
 
@@ -199,43 +249,76 @@ void codestreamToViewHeader( int &n_bytes_prediction, view *SAI, FILE *input_LF,
 		}
 	}
 
-	int32_t sparse_mask_binary_p1 = 0;
-	int32_t sparse_mask_binary_p2 = 0;
-
 	if ( SAI->use_global_sparse ) {
 
-		unsigned char tmpNNt = 0;
-		unsigned char tmpMs = 0;
-
-		n_bytes_prediction += (int)fread(&tmpNNt, sizeof(unsigned char), 1, input_LF) * sizeof(unsigned char);
-		n_bytes_prediction += (int)fread(&tmpMs, sizeof(unsigned char), 1, input_LF) * sizeof(unsigned char);
-
-		SAI->NNt = (int)tmpNNt;
-		SAI->Ms = (int)tmpMs;
-
-		SAI->sparse_weights = new int32_t[SAI->Ms]();
-		n_bytes_prediction += (int)fread(SAI->sparse_weights, sizeof(int32_t), SAI->Ms, input_LF)* sizeof(int32_t);
-
-		SAI->sparse_mask = new unsigned char[SAI->Ms]();
-
-		n_bytes_prediction += (int)fread(&sparse_mask_binary_p1, sizeof(int32_t), 1, input_LF)* sizeof(int32_t);
-		n_bytes_prediction += (int)fread(&sparse_mask_binary_p2, sizeof(int32_t), 1, input_LF)* sizeof(int32_t);
+		readSparseFromBitstream(n_bytes_prediction, input_LF, SAI->NNt, SAI->Ms, SAI->sparse_mask, SAI->sparse_weights, false);
 		
-		int ik = 0;
+	}
 
-		for (int ij = 0; ij < 64; ij++) {
-			if (ij <= 30) {
-				if ( ( sparse_mask_binary_p1 & (1 << ij) )>0 ) {
-					SAI->sparse_mask[ik] = ij; ik++;
-				}
+	if (SAI->use_region_sparse) {
+
+		unsigned int nregions_sparse = 0;
+		n_bytes_prediction += (int)fread(&nregions_sparse, sizeof(unsigned int), 1, input_LF) * sizeof(unsigned int);
+
+		for (unsigned int ii = 0; ii < nregions_sparse; ii++) {
+
+			unsigned char *tmp_mask;
+			int32_t *tmp_weights;
+
+			int tmpNNt, tmpMs;
+
+			readSparseFromBitstream(n_bytes_prediction, input_LF, SAI->NNt, SAI->Ms, tmp_mask, tmp_weights, true);
+
+			std::vector< unsigned char > vec_mask;
+			std::vector< int32_t > vec_weights;
+
+			for (int jj = 0; jj < SAI->Ms; jj++) {
+				vec_mask.push_back(tmp_mask[jj]);
+				vec_weights.push_back(tmp_weights[jj]);
 			}
-			else {
-				if ( (sparse_mask_binary_p2 & (1 << (ij-31)))>0 ) {
-					SAI->sparse_mask[ik] = ij; ik++;
-				}
-			}
+
+			SAI->region_Regr.push_back(vec_mask);
+			SAI->region_Theta.push_back(vec_weights);
+
+			delete[](tmp_weights);
+			delete[](tmp_mask);
+
 		}
+
+	}
+
+	if (SAI->use_motion_vectors) {
+
+		unsigned short n_views;
+
+		n_bytes_prediction += (int)fread(&n_views, sizeof(unsigned short), 1, input_LF) * sizeof(unsigned short);
+
+		/* Following loop reads all motion vector information to be used in forward warping this view to other views */
 		
+		for (int jj = 0; jj < n_views; jj++) {
+
+			std::pair< unsigned short, std::vector<MV_REGION> > tmp_mv_view; /* For each view we store its index and a vector of regions with reg_id,dy,dx */
+
+			unsigned int n_regions = 0;
+
+			n_bytes_prediction += (int)fread(&n_regions, sizeof(unsigned int), 1, input_LF) * sizeof(unsigned int);
+
+			n_bytes_prediction += (int)fread(&tmp_mv_view.first, sizeof(int), 1, input_LF) * sizeof(int);
+
+			for (unsigned int ik = 0; ik < n_regions; ik++) {
+
+				MV_REGION tmp_region;
+
+				n_bytes_prediction += (int)fread(&tmp_region, sizeof(MV_REGION), 1, input_LF) * sizeof(MV_REGION);
+
+				tmp_mv_view.second.push_back(tmp_region);
+
+			}
+
+			SAI->mv_views.push_back(tmp_mv_view);
+
+		}
+
 	}
 
 	return;

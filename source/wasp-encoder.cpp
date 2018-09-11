@@ -190,7 +190,6 @@ int main(int argc, char** argv) {
 	}
 	fclose(filept);
 
-
 	/* 2D array format for views, useful in some cases */
 	view ***LF_mat = new view**[maxR]();
 	for (int ii = 0; ii < maxR; ii++) {
@@ -307,14 +306,14 @@ int main(int argc, char** argv) {
 			SAI->has_depth_residual = true;
 		}
 
-		int QD = 150;
+		//int QD = 150;
 
 		int *tmp_d = new int[SAI->nr*SAI->nc]();
 		for (int ii = 0; ii < SAI->nr*SAI->nc; ii++) {
 			*(tmp_d + ii) = (int)(*(SAI->depth + ii));// / QD;
 		}
 
-		getKmeansQuantized(8, tmp_d, SAI->nr*SAI->nc, 32); /*inplace assignment to tmp_d*/
+		getKmeansQuantized(K_MEANS_CLUSTERS, tmp_d, SAI->nr*SAI->nc, K_MEANS_ITERATIONS); /*inplace assignment to tmp_d*/
 
 		int nregions = 0;
 		int *reg_histogram = 0;
@@ -323,10 +322,6 @@ int main(int argc, char** argv) {
 		SAI->label_im = label_im;
 		SAI->nregions = nregions;
 		SAI->reg_histogram = reg_histogram;
-
-		if (MOTION_VECTORS) {
-			sortRegionsBySize(SAI);
-		}
 
 		unsigned short *labels = new unsigned short[SAI->nr*SAI->nc]();
 		for (int ii = 0; ii < SAI->nr*SAI->nc; ii++) {
@@ -337,9 +332,47 @@ int main(int argc, char** argv) {
 		sprintf(labels_file, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_labels.pgm");
 		aux_write16PGMPPM(labels_file, SAI->nc, SAI->nr, 1, labels);
 
+		char tmp_d_file[1024];
+		sprintf(tmp_d_file, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_kmeans_disparity.int32");
+		FILE *tmpfile_d;
+		tmpfile_d = fopen(tmp_d_file, "wb");
+		fwrite(tmp_d, sizeof(int), SAI->nr*SAI->nc, tmpfile_d);
+		fclose(tmpfile_d);
+
+		sprintf(SAI->path_label_im, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_im_labels.int32");
+		FILE *tmpfile_im_labels;
+		tmpfile_im_labels = fopen(SAI->path_label_im, "wb");
+		fwrite(SAI->label_im, sizeof(int), SAI->nr*SAI->nc, tmpfile_im_labels);
+		fclose(tmpfile_im_labels);
+
+		if (MOTION_VECTORS) {
+
+			sortRegionsBySize(SAI);
+
+			SAI->use_motion_vectors = true;
+
+			/* loop through all views that use this current view (SAI) as a reference. compute motion vectors */
+			for (int vi = 0; vi < n_views_total; vi++) {
+
+				for (int ef = 0; ef < (LF + vi)->n_depth_references; ef++) {
+					if ((LF + vi)->depth_references[ef] == ii) {
+						getMotionVectorsView0_to_View1(SAI, LF+vi);
+					}
+				}
+
+				for (int ef = 0; ef < (LF + vi)->n_references; ef++) {
+					if ((LF + vi)->references[ef] == ii) {
+						getMotionVectorsView0_to_View1(SAI, LF+vi);
+					}
+				}
+
+			}
+			
+		}
 
 		delete[](labels);
 		delete[](tmp_d);
+
 		/*----------------DISPARITY ENDS------------------------------------------------------------*/
 
 		/* color prediction */
@@ -545,7 +578,7 @@ int main(int argc, char** argv) {
 
 		double psnr_with_region_sparse = 0.0;
 		/* here region sparse */
-		if (0 && ii>4) {
+		if (1 && ii>4) {
 
 			getRegionSparseFilter(SAI, original_color_view);
 			applyRegionSparseFilter(SAI);
@@ -556,6 +589,7 @@ int main(int argc, char** argv) {
 			sprintf(w_reg_sparse, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_wreg_sparse.ppm");
 			aux_write16PGMPPM(w_reg_sparse, SAI->nc, SAI->nr, 3, SAI->color);
 
+			SAI->use_region_sparse = true;
 		}
 
 		output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", psnr_with_region_sparse);
@@ -785,15 +819,15 @@ int main(int argc, char** argv) {
 			SAI->seg_vp = NULL;
 		}
 
-		if (SAI->segmentation != NULL) {
-			delete[](SAI->segmentation);
-			SAI->segmentation = NULL;
-		}
-
-		//if (SAI->label_im != NULL) {
-		//	delete[](SAI->label_im);
-		//	SAI->label_im = NULL;
+		//if (SAI->segmentation != NULL) {
+		//	delete[](SAI->segmentation);
+		//	SAI->segmentation = NULL;
 		//}
+
+		if (SAI->label_im != NULL) {
+			delete[](SAI->label_im);
+			SAI->label_im = NULL;
+		}
 
 	}
 

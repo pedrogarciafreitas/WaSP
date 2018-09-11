@@ -52,14 +52,15 @@ void initView(view* view)
 	view->has_depth_references = false;
 	//view->has_min_inv_depth = false;
 
-	view->has_x_displacement = false;
+	view->has_x_displacement = false; /* these are for camera displacements, sometimes we don't need them at low rates */
 	view->has_y_displacement = false;
-
 
 	/* for regions */
 	view->label_im = NULL;
 	view->nregions = 0;
 	view->reg_histogram = NULL;
+	view->use_region_sparse = false;
+	view->use_motion_vectors = false;
 
 
 }

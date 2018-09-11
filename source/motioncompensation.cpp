@@ -5,6 +5,15 @@
 #include "ppm.hh"
 #include "warping.hh"
 
+void readLabelIm(view *view0){
+	if (view0->label_im == NULL) {
+		FILE *tmpfile_im_labels = fopen(view0->path_label_im, "rb");
+		view0->label_im = new int[view0->nr*view0->nc]();
+		fread(view0->label_im, sizeof(int), view0->nr*view0->nc, tmpfile_im_labels);
+		fclose(tmpfile_im_labels);
+	}
+}
+
 int findMVIndex(view *view0, view* view1) {
 	int i_v = -1;
 	for (int ii = 0; ii < view0->mv_views.size(); ii++) {
@@ -91,6 +100,8 @@ void getMotionVectorsView0_to_View1(view *view0, view *view1) {
 		}
 	}
 
+	readLabelIm(view0);
+
 	int *segp = view0->label_im;
 
 	for (int ijk = 0; ijk < view0->nr*view0->nc; ijk++) {
@@ -162,9 +173,9 @@ void getMotionVectorsView0_to_View1(view *view0, view *view1) {
 		if (!(dy == 0 && dx == 0) && !(abs(dy) == search_radius && abs(dx) == search_radius)) {
 
 			MV_REGION mv_region;
-			mv_region.iR = view0->mv_regions.at(ik);
-			mv_region.dx = dx;
-			mv_region.dy = dy;
+			mv_region.iR = static_cast<unsigned int>( view0->mv_regions.at(ik) );
+			mv_region.dx = static_cast<signed char>( dx );
+			mv_region.dy = static_cast<signed char>( dy );
 
 			mv_regions.push_back(mv_region);
 
@@ -174,8 +185,8 @@ void getMotionVectorsView0_to_View1(view *view0, view *view1) {
 
 	if (mv_regions.size() > 0) {
 
-		std::pair< int, std::vector<MV_REGION> > tmp_mv_reg;
-		tmp_mv_reg.first = view1->i_order;
+		std::pair< unsigned short, std::vector<MV_REGION> > tmp_mv_reg;
+		tmp_mv_reg.first = static_cast<unsigned short>( view1->i_order );
 		tmp_mv_reg.second = mv_regions;
 
 		view0->mv_views.push_back(tmp_mv_reg);
@@ -207,171 +218,8 @@ void getMotionVectorsView0_to_View1(view *view0, view *view1) {
 	delete[](im1);
 	delete[](im0);
 
-	//	/* Fill in missing depth values. This step needs to be done sequentially since we propagate the missing values from side-view to side-view. */
-	//	/*% find as reference the already solved view closest to the center that
-	//	% is a neighbor of the current view*/
-	//
-	//	int closest_jj = 0;
-	//	float smallest_distance = FLT_MAX;
-	//
-	//	for (int dy = -1; dy <= 1; dy++) {
-	//		for (int dx = -1; dx <= 1; dx++) {
-	//
-	//			view *SAI_f = LF_mat[view0->r + dy][view0->c + dx];
-	//
-	//			if (SAI_f->i_order < jj) {
-	//
-	//				float dist = sqrt((float)((SAI_f->r - view0->r)*(SAI_f->r - view0->r) +
-	//					(SAI_f->c - view0->c)*(SAI_f->c - view0->c)));
-	//
-	//				if (dist < smallest_distance) {
-	//					smallest_distance = dist;
-	//					closest_jj = SAI_f->i_order;
-	//				}
-	//
-	//			}
-	//
-	//		}
-	//	}
-	//
-	//
-	//	for (int iR = 0; iR <= nregions; iR++) {
-	//		printf("view0->region_displacements[%d][%d][%d][0] = %d\t", view1->r, view1->c, iR, view0->region_displacements[view1->r][view1->c][iR][0]);
-	//		printf("view0->region_displacements[%d][%d][%d][1] = %d\n", view1->r, view1->c, iR, view0->region_displacements[view1->r][view1->c][iR][1]);
-	//	}
-	//
-	//
-	//	unsigned short *seg_warped;
-	//	unsigned short *color_seg_warped;
-	//
-	//	seg_warped = new unsigned short[view0->nr*view0->nc]();
-	//	color_seg_warped = new unsigned short[view0->nr*view0->nc * 3]();
-	//
-	//	for (int ijk = 0; ijk < view0->nr*view0->nc; ijk++) {
-	//		for (int ik = 0; ik <= nregions; ik++) {
-	//			if (*(segp + ijk) == ik) {
-	//				int iy = ijk % view0->nr; //row
-	//				int ix = (ijk - iy) / view0->nr; //col
-	//
-	//				int iy1 = iy + view0->region_displacements[view1->r][view1->c][ik][0];
-	//				int ix1 = ix + view0->region_displacements[view1->r][view1->c][ik][1];
-	//
-	//				if (iy1 >= 0 && iy1 < view0->nr && ix1 >= 0 && ix1 < view0->nc) {
-	//
-	//					int ijk1 = ix1*view0->nr + iy1;
-	//
-	//					if (*(seg_warped + ijk1) == 0) {
-	//
-	//						for (int ic = 0; ic < 3; ic++) {
-	//							int offc = ic*view0->nr*view0->nc;
-	//							if (ic < 1) {
-	//								*(seg_warped + ijk1 + offc) = ik;
-	//							}
-	//							*(color_seg_warped + ijk1 + offc) = *(im0 + ijk + offc);
-	//						}
-	//
-	//					}
-	//				}
-	//			}
-	//		}
-	//	}
-	//
-	//	/* now use the chosen view closest_jj and use 3x3 pixel neighborhood to fill in missing depth with the maximum */
-	//	if (closest_jj > 0) {
-	//		view *SAI_f = LF + closest_jj;
-	//
-	//		unsigned short *seg_f = SAI_f->segmentation;
-	//
-	//		for (int ijk = 0; ijk < view0->nr*view0->nc; ijk++) {
-	//
-	//			if (*(seg_warped + ijk) == 0) {
-	//
-	//				int iy = ijk % view0->nr; //row
-	//				int ix = (ijk - iy) / view0->nr; //col
-	//
-	//				unsigned short largest_depth = 0;
-	//
-	//				for (int dy = -1; dy <= 1; dy++) {
-	//					for (int dx = -1; dx <= 1; dx++) {
-	//
-	//						int iy1 = iy + dy;
-	//						int ix1 = ix + dx;
-	//
-	//						if (iy1 >= 0 && iy1 < view0->nr && ix1 >= 0 && ix1 < view0->nc) {
-	//
-	//							unsigned short dval = *(seg_f + ijk + dx*view0->nr + dy);
-	//
-	//							if (dval > largest_depth) {
-	//								largest_depth = dval;
-	//							}
-	//
-	//						}
-	//					}
-	//				}
-	//
-	//				*(seg_warped + ijk) = largest_depth;
-	//
-	//			}
-	//		}
-	//	}
-	//
-	//	unsigned short *DM_ROW_tmp = new unsigned short[view0->nr*view0->nc]();
-	//	unsigned short *DM_COL_tmp = new unsigned short[view0->nr*view0->nc]();
-	//
-	//	/* make row and column disparity maps, save to disk */
-	//	for (int ijk = 0; ijk < view0->nr*view0->nc; ijk++) {
-	//		int ik = *(seg_warped + ijk);
-	//		DM_ROW_tmp[ijk] = (unsigned short)view0->region_displacements[view1->r][view1->c][ik][0] + 20;
-	//		DM_COL_tmp[ijk] = (unsigned short)view0->region_displacements[view1->r][view1->c][ik][1] + 20;
-	//	}
-	//
-	//	char tempchar[1024];
-	//	sprintf(tempchar, "%s%03d_%03d%s%03d_%03d%s", output_dir, (view0)->c, (view0)->r, "_segmentation_warped_to_", view1->c, view1->r, ".pgm");
-	//	aux_write16PGMPPM(tempchar, view0->nc, view0->nr, 1, seg_warped);
-	//
-	//	memset(tempchar, 0x00, 1024 * sizeof(char));
-	//	sprintf(tempchar, "%s%03d_%03d%s%03d_%03d%s", output_dir, (view0)->c, (view0)->r, "_color_warped_to_", view1->c, view1->r, ".ppm");
-	//	aux_write16PGMPPM(tempchar, view0->nc, view0->nr, 3, color_seg_warped);
-	//
-	//	memset(tempchar, 0x00, 1024 * sizeof(char));
-	//	sprintf(tempchar, "%s%03d_%03d%s%03d_%03d%s", output_dir, (view0)->c, (view0)->r, "_warped_to_", view1->c, view1->r, "_DM_ROW.pgm");
-	//	aux_write16PGMPPM(tempchar, view0->nc, view0->nr, 1, DM_ROW_tmp);
-	//
-	//	memset(tempchar, 0x00, 1024 * sizeof(char));
-	//	sprintf(tempchar, "%s%03d_%03d%s%03d_%03d%s", output_dir, (view0)->c, (view0)->r, "_warped_to_", view1->c, view1->r, "_DM_COL.pgm");
-	//	aux_write16PGMPPM(tempchar, view0->nc, view0->nr, 1, DM_COL_tmp);
-	//
-	//	view1->segmentation = seg_warped;
-	//
-	//	delete[](DM_ROW_tmp);
-	//	delete[](DM_COL_tmp);
-	//
-	//	delete[](color_seg_warped);
-	//
-	//
-	//	//char dummy;
-	//	//std::cin >> dummy;
-	//
-	//	for (int ik = 0; ik <= nregions; ik++) {
-	//		for (int isr = 0; isr < search_radius * 2 + 1; isr++) {
-	//			delete[](match_score[ik][isr]);
-	//			delete[](counts[ik][isr]);
-	//		}
-	//		delete[](match_score[ik]);
-	//		delete[](counts[ik]);
-	//	}
-	//	delete[](match_score);
-	//	delete[](counts);
-	//
-	//}
-	//				else {
-	//					/* nothing to do, for each region displacements are zero*/
-	//				}
-	//
-	//			}
-	//
-	//			delete[](im0);
-	//
-	//		}
-
+	if (view0->label_im != NULL) {
+		delete[](view0->label_im);
+		view0->label_im = NULL;
+	}
 }

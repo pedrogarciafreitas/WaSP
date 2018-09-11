@@ -5,7 +5,6 @@
 #include <cstdlib>
 #include <cmath>
 
-
 void warpSubscripts_from_View0_to_View1_int(view *view0, view *view1, int iy, int ix, int &iynew, int &ixnew) {
 
 	float ddy = view0->y - view1->y;
@@ -54,9 +53,7 @@ void warpView0_to_View1(view *view0, view *view1, unsigned short *&warpedColor, 
 	float *DM_COL_MV = new float[view0->nr*view0->nc]();
 	float *DM_ROW_MV = new float[view0->nr*view0->nc]();
 
-	if (MOTION_VECTORS) {
-
-		getMotionVectorsView0_to_View1(view0, view1);
+	if (view0->use_motion_vectors && MOTION_VECTORS) {
 
 		int i_v = findMVIndex(view0, view1);
 
@@ -64,15 +61,22 @@ void warpView0_to_View1(view *view0, view *view1, unsigned short *&warpedColor, 
 
 			std::vector<MV_REGION> mv_regions_final = view0->mv_views.at(i_v).second;
 
+			readLabelIm(view0);
+
 			for (int ij = 0; ij < view0->nr*view0->nc; ij++) {
 				int ik = *(view0->label_im + ij);
 				for (int iR = 0; iR < mv_regions_final.size(); iR++) {
 					if (mv_regions_final.at(iR).iR == ik) {
-						*(DM_COL_MV + ij) += mv_regions_final.at(iR).dx;
-						*(DM_ROW_MV + ij) += mv_regions_final.at(iR).dy;
+						*(DM_COL_MV + ij) += 0;// static_cast<float>(mv_regions_final.at(iR).dx);
+						*(DM_ROW_MV + ij) += 0;// static_cast<float>(mv_regions_final.at(iR).dy);
 						break;
 					}
 				}
+			}
+
+			if (view0->label_im != NULL) {
+				delete[](view0->label_im);
+				view0->label_im = NULL;
 			}
 
 		}

@@ -9,8 +9,33 @@
 
 #define NULL 0
 #define MIN_REG_SZ 64
-#define NNt_reg 3
-#define Ms_reg 25
+//#define NNt_reg 3
+//#define Ms_reg 25
+
+void sortSparseFilter(const int Ms, unsigned char *sparse_mask, int32_t *sparse_weights){
+
+	/* sorting of filter coeffs (and sparsity mask) as increasing order of regressor index, new for ES2.4 */
+
+	std::vector<std::pair<unsigned char, int32_t>> sparsefilter;
+
+	for (int ij = 0; ij < Ms; ij++) {
+		std::pair<unsigned char, int32_t> tmp_sp;
+		tmp_sp.first = sparse_mask[ij];
+		tmp_sp.second = sparse_weights[ij];
+		sparsefilter.push_back(tmp_sp);
+	}
+
+	sort(sparsefilter.begin(), sparsefilter.end()); /*ascending sort based on regressor index (e.g., integer between 1 and 50 since we have 50 regressors */
+
+	memset(sparse_mask, 0x00, sizeof(unsigned char)*Ms);
+	memset(sparse_weights, 0x00, sizeof(int32_t)*Ms);
+
+	for (int ij = 0; ij < Ms; ij++) {
+		sparse_mask[ij] = sparsefilter.at(ij).first;
+		sparse_weights[ij] = sparsefilter.at(ij).second;
+	}
+
+}
 
 void checkOutOfBounds(const int RR, const int CC, const int nr, const int nc, const int dy_0, const int dx_0, int &dy, int &dx ) {
 
@@ -76,14 +101,12 @@ int checkBoundaryPixels(int *label_im, int offset, const int ijk, const int NNt,
 
 void applyRegionSparseFilter(view *view0) {
 
-	//int MIN_REG_SZ = 256;
-
 	int nregions = view0->nregions;
 	int *reg_histogram = view0->reg_histogram;
 	int *label_im = view0->label_im;
 
-	int NNt = NNt_reg;
-	int Ms = Ms_reg;
+	int NNt = view0->NNt;
+	int Ms = view0->Ms;
 
 	int nr = view0->nr;
 	int nc = view0->nc;
@@ -98,13 +121,13 @@ void applyRegionSparseFilter(view *view0) {
 
 	int reg_i = 0;
 
-	for (int ijk = 1; ijk <= nregions; ijk++) {
+	for (int ijk = 0; ijk < nregions; ijk++) {
 
-		if (reg_histogram[ijk] > MIN_REG_SZ) {
+		if (reg_histogram[ijk] >= MIN_REG_SZ) {
 
-			std::vector< double > theta0 = view0->region_Theta.at(reg_i);
+			std::vector< int32_t > theta0 = view0->region_Theta.at(reg_i);
 
-			std::vector< int > Regr0 = view0->region_Regr.at(reg_i);
+			std::vector< unsigned char > Regr0 = view0->region_Regr.at(reg_i);
 
 			reg_i++;
 
@@ -112,7 +135,7 @@ void applyRegionSparseFilter(view *view0) {
 
 			for (int ii = 0; ii < theta0.size(); ii++) {
 				if (Regr0.at(ii) > 0) {
-					theta[Regr0.at(ii) - 1] = static_cast<float>( theta0.at(ii) );
+					theta[Regr0.at(ii) - 1] = static_cast<float>( theta0.at(ii) ) / static_cast<float>(1 << BIT_DEPTH_SPARSE);
 					//printf("%i\t%f\n", Regr0.at(ii), theta[Regr0.at(ii) - 1]);
 				}
 			}
@@ -194,39 +217,14 @@ void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
 	int nr = view0->nr;
 	int nc = view0->nc;
 
-	int NNt = NNt_reg;
-	int Ms = Ms_reg;
+	int NNt = view0->NNt;
+	int Ms = view0->Ms;
 
 	unsigned short *pshort = view0->color;
 
-	//std::vector< std::pair< int, int > > disparity_regions;
+	for (int ijk = 0; ijk < nregions; ijk++) {
 
-	//for (int ijk = 1; ijk <= nregions; ijk++) {
-
-	//	if (reg_histogram[ijk] > MIN_REG_SZ) {
-
-	//		/*get disparity value*/
-	//		int disparity_value = 0;
-	//		for (int ikj = 0; ikj < nr*nc; ikj++) {
-	//			if (label_im[ikj] == ijk) {
-	//				disparity_value = label_im[ikj];
-	//				break;
-	//			}
-	//		}
-
-	//		std::pair< int, int > tmp;
-	//		tmp.first = disparity_value;
-	//		tmp.second = ijk;
-
-	//		disparity_regions.push_back(tmp);
-	//	}
-	//}
-
-	//std::sort(disparity_regions.begin(), disparity_regions.end());
-
-	for (int ijk = 1; ijk <= nregions; ijk++) {
-
-		if ( reg_histogram[ijk] > MIN_REG_SZ ) {
+		if ( reg_histogram[ijk] >= MIN_REG_SZ ) {
 
 			std::vector< unsigned int > inds;
 			for (int ikj = 0; ikj < nr*nc; ikj++) {
@@ -300,13 +298,16 @@ void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
 			//}
 			//printf("\n");
 
-			std::vector< int > PredRegr;
-			std::vector< double > PredTheta;
+			std::vector< unsigned char > PredRegr;
+			std::vector< int32_t > PredTheta;
 
 			for (int ri = 0; ri < Ms; ri++) {
-				PredRegr.push_back(PredRegr0[ri] + 1);
-				PredTheta.push_back(PredTheta0[ri]);
+				PredRegr.push_back( PredRegr0[ri] + 1 );
+				PredTheta.push_back( (int32_t)floor((PredTheta0[ri]) * (int32_t)(1 << BIT_DEPTH_SPARSE) + 0.5) );
+				//PredTheta.push_back( PredTheta0[ri] );
 			}
+
+			sortSparseFilter(Ms, PredRegr.data(), PredTheta.data());
 
 			view0->region_Regr.push_back(PredRegr);
 			view0->region_Theta.push_back(PredTheta);
@@ -339,7 +340,7 @@ void applyGlobalSparseFilter(view *view0){
 
 	for (int ii = 0; ii < Ms; ii++){
 		if (Regr0[ii] > 0){
-			theta[Regr0[ii] - 1] = ((float)theta0[ii]) / (float)(1 << BIT_DEPTH_SPARSE);
+			theta[Regr0[ii] - 1] = (static_cast<float>( theta0[ii] )) / static_cast<float>(1 << BIT_DEPTH_SPARSE);
 			printf("%i\t%f\n", Regr0[ii], theta[Regr0[ii] - 1]);
 		}
 	}
@@ -495,25 +496,6 @@ void getGlobalSparseFilter(view *view0, unsigned short *original_color_view)
 	delete[](PredRegr0);
 	delete[](PredTheta0);
 
-	/* sorting of filter coeffs and sparsity mask as increasing order of regressor index, new for ES2.4 */
-
-	std::vector<std::pair<unsigned char, int32_t>> sparsefilter;
-
-	for (int ij = 0; ij < view0->Ms; ij++) {
-		std::pair<unsigned char, int32_t> tmp_sp;
-		tmp_sp.first = view0->sparse_mask[ij];
-		tmp_sp.second = view0->sparse_weights[ij];
-		sparsefilter.push_back(tmp_sp);
-	}
-
-	sort(sparsefilter.begin(), sparsefilter.end()); /*ascending sort based on regressor index (e.g., integer between 1 and 50 since we have 50 regressors */
-
-	memset(view0->sparse_mask, 0x00, sizeof(unsigned char)*view0->Ms);
-	memset(view0->sparse_weights, 0x00, sizeof(int32_t)*view0->Ms);
-
-	for (int ij = 0; ij < view0->Ms; ij++) {
-		view0->sparse_mask[ij] = sparsefilter.at(ij).first;
-		view0->sparse_weights[ij] = sparsefilter.at(ij).second;
-	}
+	sortSparseFilter(view0->Ms, view0->sparse_mask, view0->sparse_weights);
 
 }

@@ -3,6 +3,8 @@
 
 #include "view.hh"
 
+void sortSparseFilter(const int Ms, unsigned char *sparse_mask, int32_t *sparse_weights);
+
 void checkOutOfBounds(const int RR, const int CC, const int nr, const int nc, const int dy_0, const int dx_0, int &dy, int &dx);
 int checkBoundaryPixels(int *label_im, int offset, const int ijk, const int NNt, const int ir, const int ic, const int dy, const int dx, const int nr, const int nc);
 

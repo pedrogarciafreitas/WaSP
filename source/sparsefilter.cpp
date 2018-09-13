@@ -2,6 +2,7 @@
 #include "fastols.hh"
 #include "bitdepth.hh"
 #include "motioncompensation.hh"
+#include "psnr.hh"
 
 #include <cmath>
 #include <cstdio>
@@ -9,11 +10,13 @@
 #include <algorithm>
 
 #define NULL 0
-#define MIN_REG_SZ 256
+#define MIN_REG_SZ 512
+#define SP_PSNR_THRESH 0.005
+
 //#define NNt_reg 3
 //#define Ms_reg 25
 
-void sortSparseFilter(const int Ms, unsigned char *sparse_mask, int32_t *sparse_weights){
+void sortSparseFilter(const int Ms, unsigned char *sparse_mask, int32_t *sparse_weights) {
 
 	/* sorting of filter coeffs (and sparsity mask) as increasing order of regressor index, new for ES2.4 */
 
@@ -38,7 +41,7 @@ void sortSparseFilter(const int Ms, unsigned char *sparse_mask, int32_t *sparse_
 
 }
 
-void checkOutOfBounds(const int RR, const int CC, const int nr, const int nc, const int dy_0, const int dx_0, int &dy, int &dx ) {
+void checkOutOfBounds(const int RR, const int CC, const int nr, const int nc, const int dy_0, const int dx_0, int &dy, int &dx) {
 
 	if (RR > nr - 1) {
 		dy = dy_0 - (RR - (nr - 1));
@@ -55,7 +58,7 @@ void checkOutOfBounds(const int RR, const int CC, const int nr, const int nc, co
 
 }
 
-int checkBoundaryPixels(int *label_im, int offset, const int ijk, const int NNt, const int ir, const int ic, const int dy, const int dx, const int nr, const int nc ) {
+int checkBoundaryPixels(int *label_im, int offset, const int ijk, const int NNt, const int ir, const int ic, const int dy, const int dx, const int nr, const int nc) {
 	if (*(label_im + offset) != ijk) { // if the pixel being selected is NOT part of the region
 
 		double min_d_dy_dx = FLT_MAX;
@@ -100,7 +103,116 @@ int checkBoundaryPixels(int *label_im, int offset, const int ijk, const int NNt,
 	return offset;
 }
 
-void applyRegionSparseFilter(view *view0) {
+void applyRegionSparseFilters(view *view0) {
+
+	readLabelIm(view0);
+
+	int nregions = static_cast<int>( view0->valid_regions_ir.size() );
+	int *label_im = view0->label_im;
+
+	int NNt = view0->NNt;
+	int Ms = view0->Ms;
+
+	int nr = view0->nr;
+	int nc = view0->nc;
+
+	unsigned short *pshort = view0->color;
+
+	float *final_view = new float[nr*nc * 3]();
+
+	for (int ii = 0; ii < nr*nc * 3; ii++) {
+		*(final_view + ii) = static_cast<float>(*(pshort + ii));
+	}
+
+	for (int reg_i = 0; reg_i < nregions; reg_i++) {
+
+		int ijk = view0->valid_regions_ir.at(reg_i);
+
+		std::vector< int32_t > theta0 = view0->region_Theta.at(reg_i);
+
+		std::vector< unsigned char > Regr0 = view0->region_Regr.at(reg_i);
+
+		float *theta = new float[(2 * NNt + 1)*(2 * NNt + 1) + 1]();
+
+		for (int ii = 0; ii < theta0.size(); ii++) {
+			if (Regr0.at(ii) > 0) {
+				theta[Regr0.at(ii) - 1] = static_cast<float>(theta0.at(ii)) / static_cast<float>(1 << BIT_DEPTH_SPARSE);
+				//printf("%i\t%f\n", Regr0.at(ii), theta[Regr0.at(ii) - 1]);
+			}
+		}
+
+		std::vector< unsigned int > inds;
+		for (int ikj = 0; ikj < nr*nc; ikj++) {
+			if (label_im[ikj] == ijk) {
+				inds.push_back(ikj);
+			}
+		}
+
+		for (int ee = 0; ee < inds.size(); ee++) {
+
+			int ind = inds.at(ee);
+
+			int ir = ind % nr; //row
+			int ic = (ind - ir) / nr; //col
+
+			int ie = 0;
+
+			for (int icomp = 0; icomp < 3; icomp++) {
+				*(final_view + ind + nr*nc*icomp) = 0;
+			}
+
+			for (int dy_0 = -NNt; dy_0 <= NNt; dy_0++) {
+				for (int dx_0 = -NNt; dx_0 <= NNt; dx_0++) {
+
+					int RR = ir + dy_0;
+					int CC = ic + dx_0;
+
+					int dy = dy_0;
+					int dx = dx_0;
+
+					checkOutOfBounds(RR, CC, nr, nc, dy_0, dx_0, dy, dx);
+
+					int offset = ir + dy + nr*(ic + dx);
+
+					offset = checkBoundaryPixels(label_im, offset, ijk, NNt, ir, ic, dy, dx, nr, nc);
+
+					for (int icomp = 0; icomp < 3; icomp++) {
+						final_view[ind + icomp*nr*nc] += theta[ie] * (static_cast<float>(pshort[offset + icomp*nr*nc]));
+					}
+
+					ie++;
+
+				}
+			}
+
+			/* bias term */
+			for (int icomp = 0; icomp < 3; icomp++) {
+				final_view[ind + icomp*nr*nc] += theta[(2 * NNt + 1)*(2 * NNt + 1)];
+			}
+		}
+	}
+
+
+	for (int ii = 0; ii < nr*nc * 3; ii++) {
+
+		float tmp_val = final_view[ii];
+		tmp_val = tmp_val < 0 ? 0 : tmp_val;
+		tmp_val = tmp_val > (1 << BIT_DEPTH) - 1 ? (1 << BIT_DEPTH) - 1 : tmp_val;
+		tmp_val = floor(tmp_val + 0.5f);
+
+		*(pshort + ii) = static_cast<unsigned short>(tmp_val);
+	}
+
+	delete[](final_view);
+
+	if (view0->label_im != NULL) {
+		delete[](view0->label_im);
+		view0->label_im = NULL;
+	}
+
+}
+
+std::vector< std::pair< int, int> > validateRegionSparseFilters(view *view0, unsigned short *original_color_view) {
 
 	readLabelIm(view0);
 
@@ -114,15 +226,30 @@ void applyRegionSparseFilter(view *view0) {
 	int nr = view0->nr;
 	int nc = view0->nc;
 
-	unsigned short *pshort = view0->color;
+	unsigned short *pshort = new unsigned short[nr*nc * 3]();
+	unsigned short *pshort_filtered = new unsigned short[nr*nc * 3]();
+	unsigned short *pshort_filtered_old = new unsigned short[nr*nc * 3]();
+
+	memcpy(pshort, view0->color, sizeof(unsigned short)*nr*nc * 3);
+	memcpy(pshort_filtered, view0->color, sizeof(unsigned short)*nr*nc * 3);
+	memcpy(pshort_filtered_old, view0->color, sizeof(unsigned short)*nr*nc * 3);
 
 	float *final_view = new float[nr*nc * 3]();
 
-	for (int ii = 0; ii < nr*nc*3; ii++) {
-		*(final_view + ii) = static_cast<float>( *(pshort + ii) );
+	for (int ii = 0; ii < nr*nc * 3; ii++) {
+		*(final_view + ii) = static_cast<float>(*(pshort + ii));
 	}
 
 	int reg_i = 0;
+
+	double psnryuv_old = 0;
+
+	if (original_color_view != NULL) {
+		psnryuv_old = getYCbCr_422_PSNR(pshort_filtered, original_color_view, nr, nc, 3, BIT_DEPTH);
+		printf("psnr_yuv:\t%f\n", psnryuv_old);
+	}
+
+	std::vector<std::pair<int,int> > valid_regions;
 
 	for (int ijk = 0; ijk < nregions; ijk++) {
 
@@ -132,13 +259,11 @@ void applyRegionSparseFilter(view *view0) {
 
 			std::vector< unsigned char > Regr0 = view0->region_Regr.at(reg_i);
 
-			reg_i++;
-
 			float *theta = new float[(2 * NNt + 1)*(2 * NNt + 1) + 1]();
 
 			for (int ii = 0; ii < theta0.size(); ii++) {
 				if (Regr0.at(ii) > 0) {
-					theta[Regr0.at(ii) - 1] = static_cast<float>( theta0.at(ii) ) / static_cast<float>(1 << BIT_DEPTH_SPARSE);
+					theta[Regr0.at(ii) - 1] = static_cast<float>(theta0.at(ii)) / static_cast<float>(1 << BIT_DEPTH_SPARSE);
 					//printf("%i\t%f\n", Regr0.at(ii), theta[Regr0.at(ii) - 1]);
 				}
 			}
@@ -175,11 +300,11 @@ void applyRegionSparseFilter(view *view0) {
 						checkOutOfBounds(RR, CC, nr, nc, dy_0, dx_0, dy, dx);
 
 						int offset = ir + dy + nr*(ic + dx);
-						
+
 						offset = checkBoundaryPixels(label_im, offset, ijk, NNt, ir, ic, dy, dx, nr, nc);
 
 						for (int icomp = 0; icomp < 3; icomp++) {
-							final_view[ ind + icomp*nr*nc ] += theta[ie] * (static_cast<float>(pshort[ offset + icomp*nr*nc ]));
+							final_view[ind + icomp*nr*nc] += theta[ie] * (static_cast<float>(pshort[offset + icomp*nr*nc]));
 						}
 
 						ie++;
@@ -190,21 +315,46 @@ void applyRegionSparseFilter(view *view0) {
 				/* bias term */
 				for (int icomp = 0; icomp < 3; icomp++) {
 					final_view[ind + icomp*nr*nc] += theta[(2 * NNt + 1)*(2 * NNt + 1)];
+
+					float tmpval = final_view[ind + icomp*nr*nc] < 0 ? 0 : final_view[ind + icomp*nr*nc];
+					tmpval = final_view[ind + icomp*nr*nc] > (1 << BIT_DEPTH) - 1 ? (1 << BIT_DEPTH) - 1 : final_view[ind + icomp*nr*nc];
+
+					pshort_filtered[ind + icomp*nr*nc] = static_cast<unsigned short>(floor(tmpval + 0.5f));
 				}
 
 			}
+
+			if (original_color_view != NULL) {
+				double psnryuv_new = getYCbCr_422_PSNR(pshort_filtered, original_color_view, nr, nc, 3, BIT_DEPTH);
+				if (psnryuv_new - psnryuv_old > SP_PSNR_THRESH) {
+					psnryuv_old = psnryuv_new;
+					printf("psnr_yuv:\t%f\t%i\n", psnryuv_old, reg_i);
+
+					std::pair< int, int > tmp_pair;
+					tmp_pair.first = reg_i;
+					tmp_pair.second = ijk;
+
+					valid_regions.push_back(tmp_pair);
+
+					memcpy(pshort_filtered_old, pshort_filtered, sizeof(unsigned short)*nr*nc * 3);
+
+				}
+				else {
+					memcpy(pshort_filtered,pshort_filtered_old, sizeof(unsigned short)*nr*nc * 3);
+				}
+			}
+
+			reg_i++;
 		}
 	}
 
-	for (int ii = 0; ii < nr*nc * 3; ii++) {
-		if (final_view[ii] < 0)
-			final_view[ii] = 0;
-		if (final_view[ii] > (1 << BIT_DEPTH) - 1) //(pow(2, BIT_DEPTH) - 1))
-			final_view[ii] = (1 << BIT_DEPTH) - 1;// (pow(2, BIT_DEPTH) - 1);
+	
 
-		pshort[ii] = static_cast<unsigned short>(floor(final_view[ii] +0.5));
-	}
+	//memcpy(view0->color, pshort_filtered, sizeof(unsigned short)*nr*nc * 3);
 
+	delete[](pshort);
+	delete[](pshort_filtered);
+	delete[](pshort_filtered_old);
 	delete[](final_view);
 
 	if (view0->label_im != NULL) {
@@ -212,9 +362,11 @@ void applyRegionSparseFilter(view *view0) {
 		view0->label_im = NULL;
 	}
 
+	return valid_regions;
+
 }
 
-void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
+void getRegionSparseFilter(view *view0, unsigned short *original_color_view) {
 
 	//int MIN_REG_SZ = 256;
 	readLabelIm(view0);
@@ -233,7 +385,7 @@ void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
 
 	for (int ijk = 0; ijk < nregions; ijk++) {
 
-		if ( reg_histogram[ijk] >= MIN_REG_SZ ) {
+		if (reg_histogram[ijk] >= MIN_REG_SZ) {
 
 			std::vector< unsigned int > inds;
 			for (int ikj = 0; ikj < nr*nc; ikj++) {
@@ -251,7 +403,7 @@ void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
 			double *Yd = new double[Npp]();
 
 			for (int ii = 0; ii < Npp; ii++) {
-				*(AA + ii + (NNt * 2 + 1)*(NNt * 2 + 1)*Npp) = 1.0 / ((double)(1 << BIT_DEPTH) - 1);
+				*(AA + ii + (NNt * 2 + 1)*(NNt * 2 + 1)*Npp) = 1.0 / static_cast<double>((1 << BIT_DEPTH) - 1);
 			}
 
 			int iiu = 0;
@@ -280,7 +432,7 @@ void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
 						/* get the desired Yd*/
 						if (dy == 0 && dx == 0) {
 							for (int icomp = 0; icomp < 3; icomp++) {
-								*(Yd + iiu + icomp*Npp0) = ( static_cast<double>(*(original_color_view + offset + icomp*nr*nc))) / ( static_cast<double>( (1 << BIT_DEPTH) - 1) );
+								*(Yd + iiu + icomp*Npp0) = (static_cast<double>(*(original_color_view + offset + icomp*nr*nc))) / (static_cast<double>((1 << BIT_DEPTH) - 1));
 							}
 						}
 
@@ -288,7 +440,7 @@ void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
 
 						for (int icomp = 0; icomp < 3; icomp++) {
 							/* get the regressors */
-							*(AA + iiu + icomp*Npp0 + ai*Npp) = ( static_cast<double>( *(pshort + offset + icomp*nr*nc))) / ( static_cast<double>((1 << BIT_DEPTH) - 1));// (pow(2, BIT_DEPTH) - 1);
+							*(AA + iiu + icomp*Npp0 + ai*Npp) = (static_cast<double>(*(pshort + offset + icomp*nr*nc))) / (static_cast<double>((1 << BIT_DEPTH) - 1));// (pow(2, BIT_DEPTH) - 1);
 						}
 						ai++;
 					}
@@ -311,8 +463,8 @@ void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
 			std::vector< int32_t > PredTheta;
 
 			for (int ri = 0; ri < Ms; ri++) {
-				PredRegr.push_back( PredRegr0[ri] + 1 );
-				PredTheta.push_back( (int32_t)floor((PredTheta0[ri]) * (int32_t)(1 << BIT_DEPTH_SPARSE) + 0.5) );
+				PredRegr.push_back(PredRegr0[ri] + 1);
+				PredTheta.push_back((int32_t)floor((PredTheta0[ri]) * (int32_t)(1 << BIT_DEPTH_SPARSE) + 0.5));
 				//PredTheta.push_back( PredTheta0[ri] );
 			}
 
@@ -341,7 +493,7 @@ void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
 	}
 }
 
-void applyGlobalSparseFilter(view *view0){
+void applyGlobalSparseFilter(view *view0) {
 
 	unsigned char *Regr0 = view0->sparse_mask;
 	int32_t *theta0 = view0->sparse_weights;
@@ -352,9 +504,9 @@ void applyGlobalSparseFilter(view *view0){
 
 	float *theta = new float[(2 * NNt + 1)*(2 * NNt + 1) + 1]();
 
-	for (int ii = 0; ii < Ms; ii++){
-		if (Regr0[ii] > 0){
-			theta[Regr0[ii] - 1] = (static_cast<float>( theta0[ii] )) / static_cast<float>(1 << BIT_DEPTH_SPARSE);
+	for (int ii = 0; ii < Ms; ii++) {
+		if (Regr0[ii] > 0) {
+			theta[Regr0[ii] - 1] = (static_cast<float>(theta0[ii])) / static_cast<float>(1 << BIT_DEPTH_SPARSE);
 			printf("%i\t%f\n", Regr0[ii], theta[Regr0[ii] - 1]);
 		}
 	}
@@ -370,7 +522,7 @@ void applyGlobalSparseFilter(view *view0){
 	for (int ii = 0; ii < nr*nc * 3; ii++)
 		final_view[ii] = pshort[ii];
 
-	for (int rr = NNt; rr < nr - NNt; rr++){
+	for (int rr = NNt; rr < nr - NNt; rr++) {
 		for (int cc = NNt; cc < nc - NNt; cc++)
 		{
 			for (int icomp = 0; icomp < 3; icomp++)
@@ -378,9 +530,9 @@ void applyGlobalSparseFilter(view *view0){
 
 			int ee = 0;
 
-			for (int dy = -NNt; dy <= NNt; dy++){
-				for (int dx = -NNt; dx <= NNt; dx++){
-					for (int icomp = 0; icomp < 3; icomp++){
+			for (int dy = -NNt; dy <= NNt; dy++) {
+				for (int dx = -NNt; dx <= NNt; dx++) {
+					for (int icomp = 0; icomp < 3; icomp++) {
 						final_view[rr + cc*nr + icomp*nr*nc] += theta[ee] * ((float)pshort[rr + dy + (cc + dx)*nr + icomp*nr*nc]);
 					}
 					ee++;
@@ -388,7 +540,7 @@ void applyGlobalSparseFilter(view *view0){
 			}
 
 			/* bias term */
-			for (int icomp = 0; icomp < 3; icomp++){
+			for (int icomp = 0; icomp < 3; icomp++) {
 				final_view[rr + cc*nr + icomp*nr*nc] += theta[(2 * NNt + 1)*(2 * NNt + 1)];
 			}
 
@@ -396,7 +548,7 @@ void applyGlobalSparseFilter(view *view0){
 	}
 
 
-	for (int ii = 0; ii < nr*nc * 3; ii++){
+	for (int ii = 0; ii < nr*nc * 3; ii++) {
 		if (final_view[ii] < 0)
 			final_view[ii] = 0;
 		if (final_view[ii] > (1 << BIT_DEPTH) - 1) //(pow(2, BIT_DEPTH) - 1))
@@ -444,10 +596,10 @@ void getGlobalSparseFilter(view *view0, unsigned short *original_color_view)
 
 	//int offs = 2 * NNt + 1;
 
-	for (int ir = NNt; ir < nr - NNt; ir++){
-		for (int ic = NNt; ic < nc - NNt; ic++){
+	for (int ir = NNt; ir < nr - NNt; ir++) {
+		for (int ic = NNt; ic < nc - NNt; ic++) {
 			int ai = 0;
-			for (int dy = -NNt; dy <= NNt; dy++){
+			for (int dy = -NNt; dy <= NNt; dy++) {
 				for (int dx = -NNt; dx <= NNt; dx++) {
 					for (int icomp = 0; icomp < 3; icomp++) {
 
@@ -455,11 +607,11 @@ void getGlobalSparseFilter(view *view0, unsigned short *original_color_view)
 
 						/* get the desired Yd*/
 						if (dy == 0 && dx == 0) {
-							*(Yd + iiu + icomp*Npp0) = ((double)*(original_color_view + offset)) / ( (double)(1 << BIT_DEPTH) - 1);// (pow(2, BIT_DEPTH) - 1);
+							*(Yd + iiu + icomp*Npp0) = ((double)*(original_color_view + offset)) / ((double)(1 << BIT_DEPTH) - 1);// (pow(2, BIT_DEPTH) - 1);
 						}
 
 						/* get the regressors */
-						*(AA + iiu + icomp*Npp0 + ai*Npp) = ((double)*(pshort + offset)) / ( (double)(1 << BIT_DEPTH) - 1);// (pow(2, BIT_DEPTH) - 1);
+						*(AA + iiu + icomp*Npp0 + ai*Npp) = ((double)*(pshort + offset)) / ((double)(1 << BIT_DEPTH) - 1);// (pow(2, BIT_DEPTH) - 1);
 
 					}
 					ai++;
@@ -502,9 +654,9 @@ void getGlobalSparseFilter(view *view0, unsigned short *original_color_view)
 		delete[](Yd);
 	}
 
-	for (int ii = 0; ii < Ms; ii++){
+	for (int ii = 0; ii < Ms; ii++) {
 		*(Regr0 + ii) = ((unsigned char)*(PredRegr0 + ii) + 1);
-		*(theta0 + ii) = (int32_t)floor(*(PredTheta0 + ii) * (int32_t)(1 << BIT_DEPTH_SPARSE) + 0.5 );// pow(2, BIT_DEPTH_SPARSE));
+		*(theta0 + ii) = (int32_t)floor(*(PredTheta0 + ii) * (int32_t)(1 << BIT_DEPTH_SPARSE) + 0.5);// pow(2, BIT_DEPTH_SPARSE));
 	}
 
 	delete[](PredRegr0);

@@ -84,6 +84,8 @@ struct view{
 	std::vector< std::vector< unsigned char > > region_Regr;
 	std::vector< std::vector< int32_t > > region_Theta;
 
+	std::vector< int > valid_regions_ir;
+
 	std::vector< int > mv_regions;
 
 	std::vector< std::pair< unsigned short, std::vector< MV_REGION > > > mv_views; /* first one is view index, second contains vector of regions for that view */

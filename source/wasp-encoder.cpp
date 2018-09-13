@@ -38,6 +38,9 @@
 #define STD_SEARCH_HIGH 250
 #define STD_SEARCH_STEP 10
 
+#define K_MEANS_CLUSTERS 16
+#define K_MEANS_ITERATIONS 16
+
 #define SAVE_PARTIAL_WARPED_VIEWS false
 
 #ifndef FLT_MAX
@@ -581,7 +584,31 @@ int main(int argc, char** argv) {
 		if (REGION_SPARSE_ON && ii>4) {
 
 			getRegionSparseFilter(SAI, original_color_view);
-			applyRegionSparseFilter(SAI);
+			std::vector< std::pair< int, int> > valid_regions = validateRegionSparseFilters(SAI, original_color_view);
+
+			int n_valid_regions = static_cast<int>( valid_regions.size() );
+
+			std::vector< int > valid_regions_ir;
+
+			std::vector< std::vector< unsigned char > > region_Regr_final;
+			std::vector< std::vector< int32_t > > region_Theta_final;
+
+			for (int ir = 0; ir < n_valid_regions; ir++) {
+
+				valid_regions_ir.push_back(valid_regions.at(ir).second);
+
+				region_Regr_final.push_back(SAI->region_Regr.at(valid_regions.at(ir).first));
+				region_Theta_final.push_back(SAI->region_Theta.at(valid_regions.at(ir).first));
+
+			}
+
+			SAI->region_Regr = region_Regr_final;
+			SAI->region_Theta = region_Theta_final;
+			SAI->valid_regions_ir = valid_regions_ir;
+
+			printf("size of valid regions:\t%i\n", region_Regr_final.size());
+
+			applyRegionSparseFilters(SAI);
 
 			psnr_with_region_sparse = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
 

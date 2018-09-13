@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <cmath>
 
-void warpSubscripts_from_View0_to_View1_int(view *view0, view *view1, int iy, int ix, int &iynew, int &ixnew, int dy, int dx) {
+void warpSubscripts_from_View0_to_View1_int(view *view0, view *view1, int iy, int ix, int &iynew, int &ixnew) {
 
 	float ddy = view0->y - view1->y;
 	float ddx = view0->x - view1->x;
@@ -20,8 +20,8 @@ void warpSubscripts_from_View0_to_View1_int(view *view0, view *view1, int iy, in
 		float DM_COL = disp*ddx;
 		float DM_ROW = -disp*ddy;
 
-		ixnew = ix + (int)floor(DM_COL + 0.5) + dx;
-		iynew = iy + (int)floor(DM_ROW + 0.5) + dy;
+		ixnew = ix + (int)floor(DM_COL + 0.5);
+		iynew = iy + (int)floor(DM_ROW + 0.5);
 
 	}
 	else {

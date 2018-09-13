@@ -40,7 +40,9 @@ void initView(view* view)
 
 	view->stdd = 0.0;
 
-	view->use_median = false;
+	view->use_median = false; /* median merging */
+
+	view->use_median_filter = false; /* median filter after merging */
 
 	view->yuv_transform = true;
 

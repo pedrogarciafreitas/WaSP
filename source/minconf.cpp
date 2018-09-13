@@ -28,6 +28,9 @@ minimal_config makeMinimalConfig(view *view0)
 	min_conf.encoding_flags = view0->use_region_sparse ? min_conf.encoding_flags | (1 << 10) : min_conf.encoding_flags;
 	min_conf.encoding_flags = view0->use_motion_vectors ? min_conf.encoding_flags | (1 << 11) : min_conf.encoding_flags;
 
+	min_conf.encoding_flags = view0->use_median_filter ? min_conf.encoding_flags | (1 << 12) : min_conf.encoding_flags;
+
+
 	return min_conf;
 
 }
@@ -54,5 +57,7 @@ void setup_form_minimal_config(minimal_config *mconf, view *view0) {
 
 	view0->use_region_sparse = (mconf->encoding_flags & (1 << 10))>0 ? 1 : 0;
 	view0->use_motion_vectors = (mconf->encoding_flags & (1 << 11))>0 ? 1 : 0;
+
+	view0->use_median_filter = (mconf->encoding_flags & (1 << 12))>0 ? 1 : 0;
 
 }

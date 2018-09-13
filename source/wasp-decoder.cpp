@@ -301,6 +301,17 @@ int main(int argc, char** argv) {
 			delete[](warped_color_views);
 			delete[](warped_depth_views);
 			delete[](DispTargs);
+
+			if (SAI->use_median_filter) {
+				unsigned short *tmp_med_im = new unsigned short[SAI->nr*SAI->nc * 3]();
+
+				for (int icomp = 0; icomp < 3; icomp++) {
+					medfilt2D((SAI->color) + icomp*SAI->nr*SAI->nc, tmp_med_im + icomp*SAI->nr*SAI->nc, 3, SAI->nr, SAI->nc);
+				}
+
+				memcpy(SAI->color, tmp_med_im, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+				delete[](tmp_med_im);
+			}
 		}
 
 		if (SAI->use_global_sparse)
@@ -310,7 +321,7 @@ int main(int argc, char** argv) {
 
 		if (SAI->use_region_sparse) 
 		{
-			applyRegionSparseFilter(SAI);
+			applyRegionSparseFilters(SAI);
 		}
 
 		/* prediction part OVER, move on to residual */

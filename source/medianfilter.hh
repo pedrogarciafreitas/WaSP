@@ -30,11 +30,13 @@ void medfilt2D(T* input, T* output, int SZ, int nr, int nc)
 	int dsz = (SZ / 2);
 	std::vector<T> scores;
 
-	for (int y = 0; y < nr; y++) {
-		for (int x = 0; x < nc; x++) {
+	memcpy(output, input, sizeof(T)*nr*nc);
+
+	for (int y = dsz; y < nr-dsz; y++) {
+		for (int x = dsz; x < nc-dsz; x++) {
 			scores.clear();
-			for (int dy = -dsz; dy < dsz; dy++) {
-				for (int dx = -dsz; dx < dsz; dx++) {
+			for (int dy = -dsz; dy <= dsz; dy++) {
+				for (int dx = -dsz; dx <= dsz; dx++) {
 					if ((y + dy) >= 0 && (y + dy) < nr
 						&& (x + dx) >= 0 && (x + dx) < nc)
 						scores.push_back(input[y + dy + (x + dx)*nr]);

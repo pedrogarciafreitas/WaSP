@@ -339,8 +339,8 @@ void getMotionVectorsView0_to_View1(view *view0, view *view1) {
 					for (int ic = 0; ic < 1; ic++) {
 						int offc = ic*view0->nr*view0->nc;
 						float err = static_cast<float>(*(im0 + ijk + offc)) - static_cast<float>(*(im1 + ijk1 + offc));
-						//float abse = abs(err);
-						match_score[iki][isr + search_radius][isc + search_radius] += err*err;
+						float abse = abs(err);
+						match_score[iki][isr + search_radius][isc + search_radius] += abse;
 						counts[iki][isr + search_radius][isc + search_radius]++;
 					}	
 

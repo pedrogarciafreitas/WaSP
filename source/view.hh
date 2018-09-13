@@ -65,6 +65,8 @@ struct view{
 	int i_order; /* view position in encoding configuration */
 
 	bool use_median; //use median merging or not
+	bool use_median_filter; /* median filter after merging */
+
 
 	bool yuv_transform;
 

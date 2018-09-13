@@ -38,9 +38,6 @@
 #define STD_SEARCH_HIGH 250
 #define STD_SEARCH_STEP 10
 
-#define K_MEANS_CLUSTERS 16
-#define K_MEANS_ITERATIONS 16
-
 #define SAVE_PARTIAL_WARPED_VIEWS false
 
 #ifndef FLT_MAX
@@ -510,6 +507,23 @@ int main(int argc, char** argv) {
 			delete[](warped_color_views);
 			delete[](warped_depth_views);
 			delete[](DispTargs);
+
+			unsigned short *tmp_med_im = new unsigned short[SAI->nr*SAI->nc * 3]();
+
+			for (int icomp = 0; icomp < 3; icomp++) {
+				medfilt2D((SAI->color) + icomp*SAI->nr*SAI->nc, tmp_med_im + icomp*SAI->nr*SAI->nc, 3, SAI->nr, SAI->nc);
+			}
+
+			double psnr_no_median_filter = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
+			double psnr_median_filtered = getYCbCr_422_PSNR(tmp_med_im, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
+
+			if (psnr_median_filtered > psnr_no_median_filter) {
+				SAI->use_median_filter = true;
+				memcpy(SAI->color, tmp_med_im, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+			}
+
+			delete[](tmp_med_im);
+
 		}
 
 
@@ -534,6 +548,8 @@ int main(int argc, char** argv) {
 		memcpy(colorview_temp, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
 
 		double psnr_with_sparse = 0;
+
+		
 
 		if (SAI->NNt > 0 && SAI->Ms > 0)
 		{

@@ -1,7 +1,7 @@
 #ifndef SPARSEFILTER_HH
 #define SPARSEFILTER_HH
 
-#define REGION_SPARSE_ON true
+#define REGION_SPARSE_ON false
 
 #include "view.hh"
 

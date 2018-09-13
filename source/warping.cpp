@@ -3,6 +3,8 @@
 #include "motioncompensation.hh"
 
 #include <cstdlib>
+#include <vector>
+#include <algorithm>
 #include <cmath>
 
 void warpSubscripts_from_View0_to_View1_int(view *view0, view *view1, int iy, int ix, int &iynew, int &ixnew) {
@@ -82,8 +84,20 @@ void warpView0_to_View1(view *view0, view *view1, unsigned short *&warpedColor, 
 		}
 	}
 
-	for (int ij = 0; ij < view0->nr*view0->nc; ij++)
+	std::vector< std::pair<unsigned short,int>> vecDD1;
+	for (int ij = 0; ij < view0->nr*view0->nc; ij++) {
+		std::pair< unsigned short, int> tmppair;
+		tmppair.first = DD1[ij];
+		tmppair.second = ij;
+		vecDD1.push_back(tmppair);
+	}
+
+	std::sort(vecDD1.begin(), vecDD1.end());
+
+	for (int ijj = 0; ijj < view0->nr*view0->nc; ijj++)
 	{
+
+		int ij = vecDD1.at(ijj).second;
 
 		float disp = ((float)DD1[ij] - (float)view0->min_inv_d) / (float)(1 << D_DEPTH);// pow(2, D_DEPTH);
 		float DM_COL = disp*ddx + *(DM_COL_MV+ij);

@@ -92,7 +92,7 @@ void viewHeaderToCodestream(int &n_bytes_prediction, view *SAI, FILE *output_LF_
 
 	minimal_config mconf = makeMinimalConfig(SAI);
 
-	printf("size of minimal_config %i bytes\n", (int)sizeof(minimal_config));
+	//printf("size of minimal_config %i bytes\n", (int)sizeof(minimal_config));
 
 	n_bytes_prediction += (int)fwrite(&mconf, sizeof(minimal_config), 1, output_LF_file) * sizeof(minimal_config);
 
@@ -151,6 +151,8 @@ void viewHeaderToCodestream(int &n_bytes_prediction, view *SAI, FILE *output_LF_
 
 		for (unsigned int ii = 0; ii < nregions_sparse; ii++) {
 
+			n_bytes_prediction += (int)fwrite(&SAI->valid_regions_ir[ii], sizeof(unsigned int), 1, output_LF_file) * sizeof(unsigned int);
+
 			writeSparseToBitstream(n_bytes_prediction, output_LF_file, SAI->Ms, SAI->region_Regr.at(ii).data(), SAI->NNt, SAI->region_Theta.at(ii).data(), true);
 
 		}
@@ -189,7 +191,7 @@ void codestreamToViewHeader( int &n_bytes_prediction, view *SAI, FILE *input_LF,
 
 	n_bytes_prediction += (int)fread(&mconf, sizeof(minimal_config), 1, input_LF)* sizeof(minimal_config);
 
-	printf("size of minimal_config %i bytes\n", (int)sizeof(minimal_config));
+	//printf("size of minimal_config %i bytes\n", (int)sizeof(minimal_config));
 
 	setup_form_minimal_config(&mconf, SAI);
 
@@ -265,7 +267,9 @@ void codestreamToViewHeader( int &n_bytes_prediction, view *SAI, FILE *input_LF,
 			unsigned char *tmp_mask;
 			int32_t *tmp_weights;
 
-			int tmpNNt, tmpMs;
+			int tmpIR;
+
+			n_bytes_prediction += (int)fread(&tmpIR, sizeof(unsigned int), 1, input_LF) * sizeof(unsigned int);
 
 			readSparseFromBitstream(n_bytes_prediction, input_LF, SAI->NNt, SAI->Ms, tmp_mask, tmp_weights, true);
 
@@ -279,6 +283,7 @@ void codestreamToViewHeader( int &n_bytes_prediction, view *SAI, FILE *input_LF,
 
 			SAI->region_Regr.push_back(vec_mask);
 			SAI->region_Theta.push_back(vec_weights);
+			SAI->valid_regions_ir.push_back(tmpIR);
 
 			delete[](tmp_weights);
 			delete[](tmp_mask);

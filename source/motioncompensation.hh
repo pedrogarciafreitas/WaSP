@@ -1,9 +1,10 @@
 #ifndef MOTIONCOMPENSATION_HH
 #define MOTIONCOMPENSATION_HH
 
-#define MOTION_VECTORS true
-#define MV_REG_MIN_SIZE 64
+#define MOTION_VECTORS false
+#define MV_REG_MIN_SIZE 256
 #define MV_MAX_REGS 1024
+#define MIN_RADIUS 3 
 
 #include "view.hh"
 

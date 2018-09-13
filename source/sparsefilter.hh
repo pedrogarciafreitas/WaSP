@@ -1,6 +1,8 @@
 #ifndef SPARSEFILTER_HH
 #define SPARSEFILTER_HH
 
+#define REGION_SPARSE_ON false
+
 #include "view.hh"
 
 void sortSparseFilter(const int Ms, unsigned char *sparse_mask, int32_t *sparse_weights);

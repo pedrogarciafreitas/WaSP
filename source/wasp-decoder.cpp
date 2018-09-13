@@ -70,17 +70,20 @@ int main(int argc, char** argv) {
 
 	int ii = 0; /*view index*/
 
-	while (ii < n_views_total) {
+	while (ii < n_views_total) {	
 
 		view *SAI = LF + ii;
-		ii++;
 
 		initView(SAI);
+
+		SAI->i_order = ii;
+
+		ii++;
 
 		SAI->nr = _NR;
 		SAI->nc = _NC;
 
-		SAI->i_order = ii;
+		
 
 		if (MINIMUM_DEPTH > 0) {
 			SAI->min_inv_d = (int)MINIMUM_DEPTH;
@@ -192,8 +195,8 @@ int main(int argc, char** argv) {
 		SAI->reg_histogram = reg_histogram;
 
 		unsigned short *labels = new unsigned short[SAI->nr*SAI->nc]();
-		for (int ii = 0; ii < SAI->nr*SAI->nc; ii++) {
-			*(labels + ii) = (unsigned short) *(label_im + ii);
+		for (int iii = 0; iii < SAI->nr*SAI->nc; iii++) {
+			*(labels + iii) = (unsigned short) *(label_im + iii);
 		}
 
 		char labels_file[1024];
@@ -402,6 +405,11 @@ int main(int argc, char** argv) {
 		if (SAI->seg_vp != NULL) {
 			delete[](SAI->seg_vp);
 			SAI->seg_vp = NULL;
+		}
+
+		if (SAI->label_im != NULL) {
+			delete[](SAI->label_im);
+			SAI->label_im = NULL;
 		}
 
 	}

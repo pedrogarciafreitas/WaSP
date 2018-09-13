@@ -1,6 +1,7 @@
 #include "sparsefilter.hh"
 #include "fastols.hh"
 #include "bitdepth.hh"
+#include "motioncompensation.hh"
 
 #include <cmath>
 #include <cstdio>
@@ -8,7 +9,7 @@
 #include <algorithm>
 
 #define NULL 0
-#define MIN_REG_SZ 64
+#define MIN_REG_SZ 256
 //#define NNt_reg 3
 //#define Ms_reg 25
 
@@ -100,6 +101,8 @@ int checkBoundaryPixels(int *label_im, int offset, const int ijk, const int NNt,
 }
 
 void applyRegionSparseFilter(view *view0) {
+
+	readLabelIm(view0);
 
 	int nregions = view0->nregions;
 	int *reg_histogram = view0->reg_histogram;
@@ -204,11 +207,17 @@ void applyRegionSparseFilter(view *view0) {
 
 	delete[](final_view);
 
+	if (view0->label_im != NULL) {
+		delete[](view0->label_im);
+		view0->label_im = NULL;
+	}
+
 }
 
 void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
 
 	//int MIN_REG_SZ = 256;
+	readLabelIm(view0);
 
 	int nregions = view0->nregions;
 	int *reg_histogram = view0->reg_histogram;
@@ -324,6 +333,11 @@ void getRegionSparseFilter( view *view0, unsigned short *original_color_view ) {
 
 		}
 
+	}
+
+	if (view0->label_im != NULL) {
+		delete[](view0->label_im);
+		view0->label_im = NULL;
 	}
 }
 

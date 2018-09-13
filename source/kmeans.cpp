@@ -47,7 +47,7 @@ bool updateClusters(const int K_clusters, double *centroids, double *dvalues, in
 				converge = false;
 			}
 
-			printf("Centroid id %i\told\t%f\tnew\t%f\tn: %i\n", jj, centroids[jj], new_centroid,n);
+			//printf("Centroid id %i\told\t%f\tnew\t%f\tn: %i\n", jj, centroids[jj], new_centroid,n);
 
 			centroids[jj] = new_centroid;
 		}
@@ -59,8 +59,8 @@ bool updateClusters(const int K_clusters, double *centroids, double *dvalues, in
 
 void getKmeansQuantized(const int K_clusters, int *values, const int npoints, const int iterations) {
 
-	double min_value = DBL_MAX;
-	double max_value = DBL_MIN;
+	double min_value = 10000000;
+	double max_value = -min_value;
 
 	double *dvalues = new double[npoints]();
 
@@ -84,9 +84,9 @@ void getKmeansQuantized(const int K_clusters, int *values, const int npoints, co
 
 	bool convergence = false;
 
-	while ( !convergence && n_iter<iterations ) {
+	while ( !convergence && n_iter<=iterations ) {
 
-		printf("K-Means iteration:\t%i\n", n_iter);
+		//printf("K-Means iteration:\t%i\n", n_iter);
 
 		assignClusters(K_clusters, centroids, dvalues, quantized, npoints);
 		convergence = updateClusters(K_clusters, centroids, dvalues, quantized, npoints);

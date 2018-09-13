@@ -5,7 +5,7 @@
 #include <cstdlib>
 #include <cmath>
 
-void warpSubscripts_from_View0_to_View1_int(view *view0, view *view1, int iy, int ix, int &iynew, int &ixnew) {
+void warpSubscripts_from_View0_to_View1_int(view *view0, view *view1, int iy, int ix, int &iynew, int &ixnew, int dy, int dx) {
 
 	float ddy = view0->y - view1->y;
 	float ddx = view0->x - view1->x;
@@ -20,8 +20,8 @@ void warpSubscripts_from_View0_to_View1_int(view *view0, view *view1, int iy, in
 		float DM_COL = disp*ddx;
 		float DM_ROW = -disp*ddy;
 
-		ixnew = ix + (int)floor(DM_COL + 0.5);
-		iynew = iy + (int)floor(DM_ROW + 0.5);
+		ixnew = ix + (int)floor(DM_COL + 0.5) + dx;
+		iynew = iy + (int)floor(DM_ROW + 0.5) + dy;
 
 	}
 	else {
@@ -67,8 +67,8 @@ void warpView0_to_View1(view *view0, view *view1, unsigned short *&warpedColor, 
 				int ik = *(view0->label_im + ij);
 				for (int iR = 0; iR < mv_regions_final.size(); iR++) {
 					if (mv_regions_final.at(iR).iR == ik) {
-						*(DM_COL_MV + ij) += 0;// static_cast<float>(mv_regions_final.at(iR).dx);
-						*(DM_ROW_MV + ij) += 0;// static_cast<float>(mv_regions_final.at(iR).dy);
+						*(DM_COL_MV + ij) += static_cast<float>(mv_regions_final.at(iR).dx);
+						*(DM_ROW_MV + ij) += static_cast<float>(mv_regions_final.at(iR).dy);
 						break;
 					}
 				}
@@ -110,4 +110,6 @@ void warpView0_to_View1(view *view0, view *view1, unsigned short *&warpedColor, 
 
 	}
 
+	delete[](DM_COL_MV);
+	delete[](DM_ROW_MV);
 }

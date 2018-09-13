@@ -50,19 +50,18 @@ int *get_labels(int *img, const int nr, const int nc, int &nregions, int *&reg_h
 	delete[](gr);
 	delete[](gSR);
 
-	nregions = INT32_MIN;
+	nregions = -1;
 
-	reg_histogram = new int[MAXREG]();
+	reg_histogram = new int[nr*nc]();
 
-#pragma omp parallel for
 	for (int ii = 0; ii < nr*nc; ii++) {
-		nregions = *(label_im + ii) > nregions ? *(label_im + ii)+1 : nregions;
 
-		if (*(label_im + ii) < MAXREG) {
-			reg_histogram[*(label_im + ii)]++;
-		}
+		nregions = *(label_im + ii) > nregions ? *(label_im + ii) : nregions;
+		reg_histogram[*(label_im + ii)]++;
 
 	}
+
+	nregions = nregions + 1;
 
 	printf("Number of regions:\t%i\n", nregions);
 

@@ -309,8 +309,8 @@ int main(int argc, char** argv) {
 		//int QD = 150;
 
 		int *tmp_d = new int[SAI->nr*SAI->nc]();
-		for (int ii = 0; ii < SAI->nr*SAI->nc; ii++) {
-			*(tmp_d + ii) = (int)(*(SAI->depth + ii));// / QD;
+		for (int iii = 0; iii < SAI->nr*SAI->nc; iii++) {
+			*(tmp_d + iii) = (int)(*(SAI->depth + iii));// / QD;
 		}
 
 		getKmeansQuantized(K_MEANS_CLUSTERS, tmp_d, SAI->nr*SAI->nc, K_MEANS_ITERATIONS); /*inplace assignment to tmp_d*/
@@ -578,7 +578,7 @@ int main(int argc, char** argv) {
 
 		double psnr_with_region_sparse = 0.0;
 		/* here region sparse */
-		if (1 && ii>4) {
+		if (REGION_SPARSE_ON && ii>4) {
 
 			getRegionSparseFilter(SAI, original_color_view);
 			applyRegionSparseFilter(SAI);

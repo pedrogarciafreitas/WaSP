@@ -314,6 +314,28 @@ int main(int argc, char** argv) {
 		}
 
 		getKmeansQuantized(K_MEANS_CLUSTERS, tmp_d, SAI->nr*SAI->nc, K_MEANS_ITERATIONS); /*inplace assignment to tmp_d*/
+																				  /*temporary test of label_im with blocks*/
+		/*int *blok_im = tmp_d;
+		int blocksize = 32;
+		int bi = 1;
+		for (int rr = 0; rr < SAI->nr; rr = rr + blocksize) {
+			for (int cc = 0; cc < SAI->nc; cc = cc + blocksize) {
+
+				for (int rr1 = 0; rr1 < blocksize; rr1++) {
+					for (int cc1 = 0; cc1 < blocksize; cc1++) {
+
+						int icc = cc + cc1;
+						int irr = rr + rr1;
+
+						if (icc >= 0 && icc < SAI->nc && irr >= 0 && irr < SAI->nr) {
+							int ind = irr + (icc)*SAI->nr;
+							blok_im[ind] = bi;
+						}
+					}
+				}
+				bi++;
+			}
+		}*/
 
 		int nregions = 0;
 		int *reg_histogram = 0;
@@ -349,9 +371,11 @@ int main(int argc, char** argv) {
 
 			sortRegionsBySize(SAI);
 
+			//sortRegionsByDisparity(SAI);
+
 			SAI->use_motion_vectors = true;
 
-			/* loop through all views that use this current view (SAI) as a reference. compute motion vectors */
+			/* loop through all views that use this current view (SAI) as a reference. compute motion vectors for regions */
 			for (int vi = 0; vi < n_views_total; vi++) {
 
 				for (int ef = 0; ef < (LF + vi)->n_depth_references; ef++) {
@@ -579,7 +603,6 @@ int main(int argc, char** argv) {
 		aux_write16PGMPPM(w_sparse, SAI->nc, SAI->nr, 3, SAI->color);
 		aux_write16PGMPPM(wo_sparse, SAI->nc, SAI->nr, 3, colorview_temp);
 
-
 		if (SAI->use_global_sparse) { /* check validity of sparse filter */
 			if ( psnr_with_sparse<psnr_without_sparse ) //<0.1
 			{
@@ -595,9 +618,55 @@ int main(int argc, char** argv) {
 			output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", 0.0);
 		}
 
+		///* get Y prediction error at this stage */
+		//unsigned short *ycbcr_original = new unsigned short[SAI->nr*SAI->nc * 3]();
+		//unsigned short *ycbcr_prediction = new unsigned short[SAI->nr*SAI->nc * 3]();
+
+		//RGB2YCbCr(original_color_view, ycbcr_original, SAI->nr, SAI->nc, 10);
+		//RGB2YCbCr(SAI->color, ycbcr_prediction, SAI->nr, SAI->nc, 10);
+
+		//float *Y_prediction_error = new float[SAI->nr*SAI->nc]();
+
+		//for (int jj = 0; jj < SAI->nr*SAI->nc; jj++) {
+		//	Y_prediction_error[jj] = abs( static_cast<float>(ycbcr_original[jj]) -
+		//		static_cast<float>(ycbcr_prediction[jj]) );
+		//}
+
+		//delete[](ycbcr_original);
+		//delete[](ycbcr_prediction);
+
+		//getKmeansQuantized(64, Y_prediction_error, SAI->nr*SAI->nc, K_MEANS_ITERATIONS); /*inplace assignment to tmp_d*/
+
+		//float minval_err = FLT_MAX;
+		//for (int jj = 0; jj < SAI->nr*SAI->nc; jj++) {
+		//	minval_err = Y_prediction_error[jj] < minval_err ? Y_prediction_error[jj] : minval_err;
+		//}
+
+		//int *Y_prediction_error_int32 = new int[SAI->nr*SAI->nc]();
+
+		//for (int jj = 0; jj < SAI->nr*SAI->nc; jj++) {
+		//	Y_prediction_error_int32[jj] = static_cast<int>( floor(Y_prediction_error[jj] + minval_err + 0.5) );
+		//}
+
+		//int nregions_err = 0;
+		//int *reg_histogram_err = 0;
+		//int *label_im_err = get_labels(Y_prediction_error_int32, SAI->nr, SAI->nc, nregions_err, reg_histogram_err);
+
+		//char tmplabelchar[1024];
+		//sprintf(tmplabelchar, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_im_pred_err_labels.int32");
+		//tmpfile_im_labels = fopen(tmplabelchar, "wb");
+		//fwrite(label_im_err, sizeof(int), SAI->nr*SAI->nc, tmpfile_im_labels);
+		//fclose(tmpfile_im_labels);
+
+		//delete[](Y_prediction_error);
+		//delete[](Y_prediction_error_int32);
+
 		double psnr_with_region_sparse = 0.0;
 		/* here region sparse */
 		if (REGION_SPARSE_ON && ii>4) {
+
+			SAI->Ms = 9;
+			SAI->NNt = 3;
 
 			getRegionSparseFilter(SAI, original_color_view);
 			std::vector< std::pair< int, int> > valid_regions = validateRegionSparseFilters(SAI, original_color_view);

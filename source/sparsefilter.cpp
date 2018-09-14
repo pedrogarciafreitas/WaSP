@@ -10,7 +10,7 @@
 #include <algorithm>
 
 #define NULL 0
-#define MIN_REG_SZ 1024
+#define MIN_REG_SZ 256
 #define SP_PSNR_THRESH 0.01
 
 //#define NNt_reg 3

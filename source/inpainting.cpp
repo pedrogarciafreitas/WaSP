@@ -7,11 +7,11 @@ void holefilling(unsigned short *pshort, const int ncomps, const int nr, const i
 
 	int iter = 0;
 
-	while (holes.size() > 0) {
-		holefilling_alg(holes, pshort, ncomps, nr, nc, maskval);
-		holes = getHoles(pshort, nr, nc, maskval, ncomps);
-		printf("holefilling iteration:\t%i\t n:%i\n", iter++, static_cast<int>(holes.size()));
-	}
+	//while (holes.size() > 0) {
+	holefilling_alg(holes, pshort, ncomps, nr, nc, maskval);
+	holes = getHoles(pshort, nr, nc, maskval, ncomps);
+	printf("holefilling iteration:\t%i\t n:%i\n", iter++, static_cast<int>(holes.size()));
+	//}
 }
 
 std::vector<unsigned int> getHoles(unsigned short *pshort,const int nr, const int nc, const unsigned short maskval, const int ncomps) {

@@ -9,13 +9,40 @@
 #include "ycbcr.hh"
 #include "bitdepth.hh"
 
-void readLabelIm(view *view0){
+void readLabelIm(view *view0) {
+
+	if (view0->label_im != NULL) {
+		delete[](view0->label_im);
+		view0->label_im = NULL;
+	}
+
 	if (view0->label_im == NULL) {
 		FILE *tmpfile_im_labels = fopen(view0->path_label_im, "rb");
 		view0->label_im = new int[view0->nr*view0->nc]();
 		fread(view0->label_im, sizeof(int), view0->nr*view0->nc, tmpfile_im_labels);
 		fclose(tmpfile_im_labels);
 	}
+
+
+	if (view0->reg_histogram != NULL) {
+		delete[](view0->reg_histogram);
+		view0->reg_histogram = NULL;
+	}
+
+	if (view0->reg_histogram == NULL) {
+		view0->reg_histogram = new int[view0->nr*view0->nc]();
+	}
+
+	view0->nregions = -1;
+
+	for (int ii = 0; ii < view0->nr*view0->nc; ii++) {
+
+		view0->nregions = *(view0->label_im + ii) > view0->nregions ? *(view0->label_im + ii) : view0->nregions;
+		view0->reg_histogram[*(view0->label_im + ii)]++;
+
+	}
+
+
 }
 
 int findMVIndex(view *view0, view* view1) {
@@ -45,7 +72,9 @@ void sortRegionsBySize(view *view0) {
 
 	std::sort(reg_sz.begin(), reg_sz.end());
 
-	for (int iR = static_cast<int>(reg_sz.size()) - 1; iR >= 0; iR--) {
+	for (int ii = static_cast<int>(reg_sz.size()) - 1; ii >= 0; ii--) {
+
+		int iR = reg_sz.at(ii).second;
 
 		if (view0->reg_histogram[iR] >= MV_REG_MIN_SIZE && view0->mv_regions.size() <= MV_MAX_REGS) {
 			view0->mv_regions.push_back(iR);
@@ -55,6 +84,50 @@ void sortRegionsBySize(view *view0) {
 			break;
 		}
 
+	}
+
+}
+
+void sortRegionsByDisparity(view *view0) {
+
+	std::vector<std::pair<int, int>> reg_sz;
+
+	readLabelIm(view0);
+
+	int *disparities_for_regions = new int[view0->nregions]();
+	for (int ij = 0; ij < view0->nr*view0->nc; ij++) {
+		disparities_for_regions[view0->label_im[ij]] = view0->depth[ij];
+	}
+
+	for (int iR = 0; iR < view0->nregions; iR++) {
+
+		std::pair<int, int> tmp_reg;
+		tmp_reg.first = disparities_for_regions[iR];
+		tmp_reg.second = iR;
+
+		reg_sz.push_back(tmp_reg);
+
+	}
+
+	std::sort(reg_sz.begin(), reg_sz.end());
+
+	for (int ii = static_cast<int>(reg_sz.size()) - 1; ii >= 0; ii--) {
+
+		int iR = reg_sz.at(ii).second;
+
+		if (view0->reg_histogram[iR] >= MV_REG_MIN_SIZE && view0->mv_regions.size() <= MV_MAX_REGS) {
+			view0->mv_regions.push_back(iR);
+		}
+
+		if (view0->mv_regions.size() == MV_MAX_REGS) {
+			break;
+		}
+
+	}
+
+	if (view0->label_im != NULL) {
+		delete[](view0->label_im);
+		view0->label_im = NULL;
 	}
 
 }
@@ -240,16 +313,18 @@ void sortRegionsBySize(view *view0) {
 
 void getMotionVectorsView0_to_View1(view *view0, view *view1) {
 
-	if (findMVIndex(view0, view1) >-1 ) {
+	if (findMVIndex(view0, view1) > -1) {
 		printf("Motion vectors already available ...\n");
 		return;
 	}
 	else {
-		printf("Motion vector esimation between views %i (%i,%i) and %i (%i,%i) ...\n",view0->i_order,
-			view0->r,view0->c, view1->i_order, view1->r, view1->c);
+		printf("Motion vector esimation between views %i (%i,%i) and %i (%i,%i) ...\n", view0->i_order,
+			view0->r, view0->c, view1->i_order, view1->r, view1->c);
 	}
 
-	int nregions = static_cast<int>(view0->mv_regions.size());
+	//int nregions = static_cast<int>(view0->mv_regions.size());
+
+	int nregions = view0->nregions + 1;
 
 	/* initialize region displacement table */
 	int **region_displacements = new int*[nregions]();
@@ -265,7 +340,7 @@ void getMotionVectorsView0_to_View1(view *view0, view *view1) {
 	unsigned short *im1;
 	aux_read16PGMPPM(view1->path_input_ppm, view1->nc, view1->nr, ncomp1, im1);
 
-	int search_radius = 12; // search -search_radius:search_radius in both x,y
+	int search_radius = MV_SEARCH_RADIUS; // search -search_radius:search_radius in both x,y
 
 	float ***match_score = new float**[nregions]();
 	for (int ik = 0; ik < nregions; ik++) {
@@ -287,18 +362,25 @@ void getMotionVectorsView0_to_View1(view *view0, view *view1) {
 
 	int *label_im = view0->label_im;
 
-	int *lut_reg = new int[view0->nregions]();
+	//int *lut_reg = new int[view0->nregions]();
 
-	for (int ijk = 0; ijk < view0->nr*view0->nc; ijk++) {
-		for (int iki = 0; iki < nregions; iki++) {
-			int ik = view0->mv_regions.at(iki);
-			if (*(label_im + ijk) == ik) {
-				lut_reg[*(label_im + ijk)] = iki;
-			}
-		}
-	}
+	//for (int iR = 0; iR < view0->nregions; iR++) {
+	//	lut_reg[iR] = -1;
+	//}
 
-	if (1) {
+	//for (int ijk = 0; ijk < view0->nregions; ijk++) {
+	//	for (int iki = 0; iki < nregions; iki++) {
+	//		if ( ijk == view0->mv_regions.at(iki)) {
+	//			lut_reg[ijk] = iki;
+	//			break;
+	//		}
+	//	}
+	//}
+
+	bool YUV_MV = true;
+	int NCOMP_MV = YUV_MV ? 1 : 3;
+
+	if (YUV_MV) {
 		unsigned short *ycbcr0 = new unsigned short[view0->nr*view0->nc * 3]();
 		unsigned short *ycbcr1 = new unsigned short[view0->nr*view0->nc * 3]();
 
@@ -313,37 +395,49 @@ void getMotionVectorsView0_to_View1(view *view0, view *view1) {
 		im1 = ycbcr1;
 	}
 
+	int *regions_out_of_view = new int[view0->nregions]();
+
 	for (int ijk = 0; ijk < view0->nr*view0->nc; ijk++) {
 
-		int iki = lut_reg[*(label_im + ijk)];
+		//int iki = lut_reg[*(label_im + ijk)];
 
-		int iy = ijk % view0->nr; //row
-		int ix = (ijk - iy) / view0->nr; //col
+		int iR = *(label_im + ijk);
 
-		int iy1;
-		int ix1;
+		//printf("%i\t", iR);
 
-		warpSubscripts_from_View0_to_View1_int(view0, view1, iy, ix, iy1, ix1);
+		if (view0->reg_histogram[iR]>=MV_REG_MIN_SIZE && !regions_out_of_view[iR]) {
 
-#pragma omp parallel for
-		for (int isr = -search_radius; isr <= search_radius; isr++) {
-			for (int isc = -search_radius; isc <= search_radius; isc++) {
+			int iy = ijk % view0->nr; //row
+			int ix = (ijk - iy) / view0->nr; //col
 
-				int iy11 = iy1 + isr;
-				int ix11 = ix1 + isc;
+			int iy1;
+			int ix1;
 
-				if (iy11 >= 0 && iy11 < view0->nr && ix11 >= 0 && ix11 < view0->nc) {
+			warpSubscripts_from_View0_to_View1_int(view0, view1, iy, ix, iy1, ix1);
 
-					int ijk1 = ix11*view0->nr + iy11;
+//#pragma omp parallel for
+			for (int isr = -search_radius; isr <= search_radius; isr++) {
+				for (int isc = -search_radius; isc <= search_radius; isc++) {
 
-					for (int ic = 0; ic < 1; ic++) {
-						int offc = ic*view0->nr*view0->nc;
-						float err = static_cast<float>(*(im0 + ijk + offc)) - static_cast<float>(*(im1 + ijk1 + offc));
-						float abse = abs(err);
-						match_score[iki][isr + search_radius][isc + search_radius] += abse;
-						counts[iki][isr + search_radius][isc + search_radius]++;
-					}	
+					int iy11 = iy1 + isr;
+					int ix11 = ix1 + isc;
 
+					if (iy11 >= 0 && iy11 < view0->nr && ix11 >= 0 && ix11 < view0->nc) {
+
+						int ijk1 = ix11*view0->nr + iy11;
+
+						for (int ic = 0; ic < NCOMP_MV; ic++) {
+							int offc = ic*view0->nr*view0->nc;
+							float err = static_cast<float>(*(im0 + ijk + offc)) - static_cast<float>(*(im1 + ijk1 + offc));
+							float abse = abs(err);
+							match_score[iR][isr + search_radius][isc + search_radius] += abse;
+							counts[iR][isr + search_radius][isc + search_radius]++;
+						}
+
+					}
+					else {
+						regions_out_of_view[iR] = 1;
+					}
 				}
 			}
 		}
@@ -353,48 +447,57 @@ void getMotionVectorsView0_to_View1(view *view0, view *view1) {
 
 	/* find best matching displacement */
 	for (int ik = 0; ik < nregions; ik++) {
-		float lowest_score = FLT_MAX;
-		for (int isr = 0; isr < search_radius * 2 + 1; isr++) {
-			for (int isc = 0; isc < search_radius * 2 + 1; isc++) {
 
-				int nk = counts[ik][isr][isc];
+		if (view0->reg_histogram[ik] >= MV_REG_MIN_SIZE ) {
 
-				if (nk > 0) {
+			float lowest_score = FLT_MAX;
+			for (int isr = 0; isr < search_radius * 2 + 1; isr++) {
+				for (int isc = 0; isc < search_radius * 2 + 1; isc++) {
 
-					float clow = match_score[ik][isr][isc] / static_cast<float>( nk );
+					int nk = counts[ik][isr][isc];
 
-					//printf("%f\n", clow);
+					if (nk > 0) {
 
-					if (clow < lowest_score) {
-						region_displacements[ik][0] = isr - search_radius;
-						region_displacements[ik][1] = isc - search_radius;
-						lowest_score = clow;
+						float clow = match_score[ik][isr][isc] / static_cast<float>(nk);
+
+						//printf("%f\n", clow);
+
+						if (clow < lowest_score) {
+							region_displacements[ik][0] = isr - search_radius;
+							region_displacements[ik][1] = isc - search_radius;
+							lowest_score = clow;
+						}
+
 					}
-
 				}
 			}
-		}
 
-		int dx = region_displacements[ik][1];
-		int dy = region_displacements[ik][0];
+			int dx = region_displacements[ik][1];
+			int dy = region_displacements[ik][0];
 
-		if (!(dy == 0 && dx == 0)) {
+			if (!(dy == 0 && dx == 0)) {
 
-			MV_REGION mv_region;
-			mv_region.iR = static_cast<unsigned int>( view0->mv_regions.at(ik) );
-			mv_region.dx = static_cast<signed char>( dx );
-			mv_region.dy = static_cast<signed char>( dy );
+				MV_REGION mv_region;
+				mv_region.iR = static_cast<unsigned int>(ik);
+				mv_region.dx = static_cast<signed char>(dx);
+				mv_region.dy = static_cast<signed char>(dy);
 
-			mv_regions.push_back(mv_region);
+				if (!regions_out_of_view[mv_region.iR]) {
+					mv_regions.push_back(mv_region);
+				}
+
+			}
 
 		}
 
 	}
 
+	delete[](regions_out_of_view);
+
 	if (mv_regions.size() > 0) {
 
 		std::pair< unsigned short, std::vector<MV_REGION> > tmp_mv_reg;
-		tmp_mv_reg.first = static_cast<unsigned short>( view1->i_order );
+		tmp_mv_reg.first = static_cast<unsigned short>(view1->i_order);
 		tmp_mv_reg.second = mv_regions;
 
 		view0->mv_views.push_back(tmp_mv_reg);

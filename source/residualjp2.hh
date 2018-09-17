@@ -4,6 +4,9 @@
 #include <cstdio>
 #include <vector>
 
+unsigned short *getResidual(const int nr, const int nc, const int ncomp, unsigned short *original_intermediate_view, unsigned short *ps,
+	const int offset, const bool RESIDUAL_16BIT_bool);
+
 void getJP2Header(unsigned char *JP2, unsigned char *&header, int JP2Size, int &headerSize);
 
 int getJP2DictionaryIndex(unsigned char *JP2header, int headerSize,

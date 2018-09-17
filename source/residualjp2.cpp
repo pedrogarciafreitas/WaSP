@@ -13,6 +13,7 @@
 
 #define CLEVELS 6
 #define USE_JP2_DICTIONARY 1
+#define QVAL 1
 
 void getJP2Header(unsigned char *JP2, unsigned char *&header, int JP2Size, int &headerSize) {
 
@@ -273,8 +274,20 @@ void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char
 	signed int BP = RESIDUAL_16BIT_bool ? 16 : 10;
 	signed int maxval = (1 << BP) - 1;// pow(2, BP) - 1;
 
+	bool no_prediction = true;
+
+	for (int iir = 0; iir < nr1*nc1*ncomp; iir++) {
+		if (*(ps + iir) > 0) {
+			no_prediction = false;
+			break;
+		}
+	}
+
+	int qval = no_prediction ? 1 : QVAL;
+
 	for (int ii = 0; ii < nr1*nc1*ncomp; ii++) {
 		*(ycbcr + ii) = clip(*(ycbcr + ii), (unsigned short)0, (unsigned short)maxval);
+		*(ycbcr + ii) = *(ycbcr + ii) *qval;
 	}
 
 	unsigned short *rgb = new unsigned short[nr1*nc1*ncomp]();
@@ -287,8 +300,6 @@ void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char
 		YCbCr2RGB(ycbcr, rgb, nr1, nc1, 10);
 	}
 
-	/* apply residual */
-
 	for (int iir = 0; iir < nc1*nr1 * ncomp; iir++)
 	{
 		signed int val = (signed int)*(ps + iir) + (signed int)(rgb[iir]*dv) - offset; // we assume that for 10bit case we have offset as 2^10-1, so go from 2^11 range to 2^10 and lose 1 bit of precision
@@ -300,12 +311,9 @@ void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char
 	delete[](rgb);
 }
 
-
-void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_intermediate_view, unsigned short *ps, char *ycbcr_pgm_names[],
-	const char *kdu_compress_path, char *ycbcr_jp2_names[], const float residual_rate, const int ncomp, const int offset, float rate_a,
-	const bool RESIDUAL_16BIT_bool)
-{
-	/*establish residual*/
+unsigned short *getResidual(const int nr, const int nc, const int ncomp, unsigned short *original_intermediate_view, unsigned short *ps,
+	const int offset, const bool RESIDUAL_16BIT_bool)
+{	/*establish residual*/
 	unsigned short *residual_image = new unsigned short[nr*nc * ncomp]();
 
 	signed int dv = RESIDUAL_16BIT_bool ? 1 : 2;
@@ -313,10 +321,32 @@ void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_
 	signed int maxval = (1 << BP) - 1;// pow(2, BP) - 1;
 
 	for (int iir = 0; iir < nr*nc*ncomp; iir++) {
-		signed int res_val = ( (((signed int)*(original_intermediate_view + iir)) - ((signed int)*(ps + iir)) + offset) )/dv;
+		signed int res_val = ((((signed int)*(original_intermediate_view + iir)) - ((signed int)*(ps + iir)) + offset)) / dv;
 		res_val = clip(res_val, 0, maxval);
 		*(residual_image + iir) = (unsigned short)(res_val);
 	}
+
+	return residual_image;
+}
+
+void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_intermediate_view, unsigned short *ps, char *ycbcr_pgm_names[],
+	const char *kdu_compress_path, char *ycbcr_jp2_names[], const float residual_rate, const int ncomp, const int offset, float rate_a,
+	const bool RESIDUAL_16BIT_bool)
+{
+	///*establish residual*/
+	//unsigned short *residual_image = new unsigned short[nr*nc * ncomp]();
+
+	//signed int dv = RESIDUAL_16BIT_bool ? 1 : 2;
+	//signed int BP = RESIDUAL_16BIT_bool ? 16 : 10;
+	//signed int maxval = (1 << BP) - 1;// pow(2, BP) - 1;
+
+	//for (int iir = 0; iir < nr*nc*ncomp; iir++) {
+	//	signed int res_val = ( (((signed int)*(original_intermediate_view + iir)) - ((signed int)*(ps + iir)) + offset) )/dv;
+	//	res_val = clip(res_val, 0, maxval);
+	//	*(residual_image + iir) = (unsigned short)(res_val);
+	//}
+
+	unsigned short *residual_image = getResidual(nr, nc, ncomp, original_intermediate_view, ps, offset, RESIDUAL_16BIT_bool);
 
 	unsigned short *ycbcr = new unsigned short[nr*nc*ncomp]();
 
@@ -325,6 +355,22 @@ void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_
 	}
 	else {
 		RGB2YCbCr(residual_image, ycbcr, nr, nc, 10);
+	}
+
+	bool no_prediction = true;
+
+	for (int iir = 0; iir < nr*nc*ncomp; iir++) {
+		if (*(ps + iir) > 0) {
+			no_prediction = false;
+			break;
+		}
+	}
+
+	int qval = no_prediction ? 1 : QVAL;
+
+	for (int iir = 0; iir < nr*nc*3; iir++) {
+		//*(ycbcr + iir) = no_prediction ? *(ycbcr+iir) : 0;// *(ycbcr + iir) < qval ? 0 : *(ycbcr + iir);
+		*(ycbcr + iir) = *(ycbcr + iir) / qval;// < qval ? 0 : *(ycbcr + iir);
 	}
 
 	unsigned short *tmp_im = new unsigned short[nr*nc]();
@@ -383,17 +429,19 @@ void encodeResidualJP2(const int nr, const int nc, unsigned short *original_inte
 	const char *kdu_compress_path, const char *jp2_residual_path_jp2, const float residual_rate, const int ncomp, const int offset, const bool RESIDUAL_16BIT_bool)
 {
 	/*establish residual*/
-	unsigned short *residual_image = new unsigned short[nr*nc * ncomp]();
+	//unsigned short *residual_image = new unsigned short[nr*nc * ncomp]();
 
-	signed int dv = RESIDUAL_16BIT_bool ? 1 : 2;
-	signed int BP = RESIDUAL_16BIT_bool ? 16 : 10;
-	signed int maxval = (1 << BP) - 1;// pow(2, BP) - 1;
+	//signed int dv = RESIDUAL_16BIT_bool ? 1 : 2;
+	//signed int BP = RESIDUAL_16BIT_bool ? 16 : 10;
+	//signed int maxval = (1 << BP) - 1;// pow(2, BP) - 1;
 
-	for (int iir = 0; iir < nr*nc*ncomp; iir++) {
-		signed int res_val = ((((signed int)*(original_intermediate_view + iir)) - ((signed int)*(ps + iir)) + offset)) / dv;
-		res_val = clip(res_val, 0, maxval);
-		*(residual_image + iir) = (unsigned short)(res_val);
-	}
+	//for (int iir = 0; iir < nr*nc*ncomp; iir++) {
+	//	signed int res_val = ((((signed int)*(original_intermediate_view + iir)) - ((signed int)*(ps + iir)) + offset)) / dv;
+	//	res_val = clip(res_val, 0, maxval);
+	//	*(residual_image + iir) = (unsigned short)(res_val);
+	//}
+
+	unsigned short *residual_image = getResidual(nr, nc, ncomp, original_intermediate_view, ps, offset, RESIDUAL_16BIT_bool);
 
 	aux_write16PGMPPM(ppm_residual_path, nc, nr, ncomp, residual_image);
 

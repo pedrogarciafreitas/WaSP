@@ -108,7 +108,7 @@ void getViewMergingLSWeights_N(view *view0, unsigned short **warpedColorViews, f
 
 	/* run fastOLS on the classes */
 
-	signed short *thetas = new signed short[MMM * n_references]();
+	signed short *thetas = new signed short[MMM * ( n_references + 1)]();
 
 	for (int ij = 1; ij < MMM; ij++){
 
@@ -119,13 +119,14 @@ void getViewMergingLSWeights_N(view *view0, unsigned short **warpedColorViews, f
 
 		for (int ik = 0; ik<n_references; ik++)
 		{
-			if (bmask[ij + MMM * ik])
+			if (bmask[ij + MMM * ik]) {
 				M++;
+			}
 		}
 
 		int N = number_of_pixels_per_region[ij] * 3; // number of rows in A
 
-		double *AA = new double[N*M]();
+		double *AA = new double[N*(M + 1)]();
 		double *Yd = new double[N]();
 
 		unsigned short *ps;
@@ -142,6 +143,10 @@ void getViewMergingLSWeights_N(view *view0, unsigned short **warpedColorViews, f
 			}
 		}
 
+		for (int ii = 0; ii < N; ii++) {
+			*(AA + ii + M*N) = 1.0 / (double)((1 << BIT_DEPTH) - 1); /* last column in AA, bias term */
+		}
+
 		ps = original_view_in_classes[ij];
 
 		for (int ii = 0; ii < N; ii++){
@@ -150,12 +155,12 @@ void getViewMergingLSWeights_N(view *view0, unsigned short **warpedColorViews, f
 
 		/* fastols */
 
-		int *PredRegr0 = new int[M]();
-		double *PredTheta0 = new double[M]();
+		int *PredRegr0 = new int[M+1]();
+		double *PredTheta0 = new double[M+1]();
 
 		//int Mtrue = FastOLS(ATA, ATYd, YdTYd, PredRegr0, PredTheta0, M, M, M);
 
-		int Mtrue = FastOLS_new(&AA, &Yd, PredRegr0, PredTheta0, M, M, M, N);
+		int Mtrue = FastOLS_new(&AA, &Yd, PredRegr0, PredTheta0, M+1, M+1, M+1, N);
 
 		if (AA != NULL) {
 			delete[](AA);
@@ -165,37 +170,48 @@ void getViewMergingLSWeights_N(view *view0, unsigned short **warpedColorViews, f
 		}
 
 		/* establish the subset of reference views available for class */
-		int *iks = new int[M]();
+		int *iks = new int[M+1]();
 		int ee = 0;
 		for (int ik = 0; ik < n_references; ik++){
 			if (bmask[ij + ik * MMM]){
-				*(iks + ee) = ik;
-				ee++;
+				*(iks + ee++) = ik;
 			}
 		}
+		*(iks + M) = n_references;
 
-		for (int ii = 0; ii < M; ii++){
+		for (int ii = 0; ii < M+1; ii++){
 			thetas[ij + MMM * iks[PredRegr0[ii]]] = (signed short)floor(*(PredTheta0 + ii)*(signed short)(1 << BIT_DEPTH_MERGE) + 0.5);// pow(2, BIT_DEPTH_MERGE) + 0.5);
+			//printf("%f\t", *(PredTheta0 + ii));
+			/*printf("%i,%i\t", PredRegr0[ii],iks[PredRegr0[ii]]);
+			printf("%i\t", thetas[ij + MMM * iks[PredRegr0[ii]]]);*/
 		}
+
+		/*printf("\n");*/
+
+		//thetas[ij + MMM * n_references] = (signed short)floor(*(PredTheta0 + M)*(signed short)(1 << BIT_DEPTH_MERGE) + 0.5);
 
 		delete[](iks);
 
 		delete[](PredRegr0);
 		delete[](PredTheta0);
-		
 
 
 	}
-
+	//printf("\n");
 	/* columnwise collecting of thetas */
 	int in = 0;
 	for (int ik = 0; ik < n_references; ik++){
+		//printf("\n");
 		for (int ij = 0; ij < MMM; ij++){
 			if (bmask[ij + ik * MMM]){
-				LScoeffs[in] = thetas[ij + MMM * ik];
-				in++;
+				LScoeffs[in++] = thetas[ij + MMM * ik];
+				//printf("%i\t", LScoeffs[in-1]);
 			}
 		}
+	}
+
+	for (int ij = 0; ij < MMM; ij++) {
+		LScoeffs[in++] = thetas[ij + MMM * n_references]; /* bias term, last column in theta */
 	}
 
 	delete[](thetas);
@@ -257,11 +273,11 @@ void initViewW(view *view0, float **DispTargs) {
 	(view0)->NB = (1 << view0->n_references)*view0->n_references; // (pow(2, (view0)->n_references)*(view0)->n_references);
 	
 	if ((view0)->merge_weights == NULL) {
-		signed short *merge_weights = new signed short[(view0)->NB / 2]();
+		signed short *merge_weights = new signed short[(view0)->NB / 2 + (1 << view0->n_references)]();
 		(view0)->merge_weights = merge_weights;
 	}
 
-	float *merge_weights_float = new float[(view0)->NB]();
+	float *merge_weights_float = new float[(view0)->NB + (1 << view0->n_references)]();
 
 	(view0)->merge_weights_float = merge_weights_float;
 
@@ -353,15 +369,32 @@ void mergeWarped_N(unsigned short **warpedColorViews, float **DispTargs, view *v
 	
 	int uu = 0;
 
-	for (int ii = 0; ii < MMM * (view0)->n_references; ii++){
-		if (bmask[ii]){
-			(view0)->merge_weights_float[ii] = ((float)(view0)->merge_weights[uu++]) / (float)(1 << BIT_DEPTH_MERGE);// pow(2, BIT_DEPTH_MERGE);
-			//std::cout << (view0)->merge_weights_float[ii] << "\t";
-			//printf("%f\t", (view0)->merge_weights_float[ii]);
+	for (int ik = 0; ik < view0->n_references; ik++) {
+		//printf("\n");
+		for (int ij = 0; ij < MMM; ij++) {
+			if (bmask[ij + ik * MMM]) {
+				(view0)->merge_weights_float[ij + ik * MMM] = ((float)(view0)->merge_weights[uu++]) / (float)(1 << BIT_DEPTH_MERGE);// pow(2, BIT_DEPTH_MERGE);																											 //		
+				//printf("%i\t", (view0)->merge_weights[uu - 1]);
+			}
+			else {
+				(view0)->merge_weights_float[ij + ik * MMM] = 0.0;
+			}
 		}
-		else{
-			(view0)->merge_weights_float[ii] = 0.0;
-		}
+	}
+
+	//for (int ii = 0; ii < MMM * (view0)->n_references; ii++){
+	//	if (bmask[ii]){
+	//		(view0)->merge_weights_float[ii] = ((float)(view0)->merge_weights[uu++]) / (float)(1 << BIT_DEPTH_MERGE);// pow(2, BIT_DEPTH_MERGE);
+	//		//std::cout << (view0)->merge_weights_float[ii] << "\t";
+	//		printf("%f\t", (view0)->merge_weights_float[ii]);
+	//	}
+	//	else{
+	//		(view0)->merge_weights_float[ii] = 0.0;
+	//	}
+	//}
+
+	for (int ii = MMM * (view0)->n_references; ii < MMM * (view0)->n_references + MMM; ii++) {
+		(view0)->merge_weights_float[ii] = ((float)(view0)->merge_weights[uu++]) / (float)(1 << BIT_DEPTH_MERGE); /* bias term, last column*/
 	}
 
 	int nr = (view0)->nr;
@@ -381,8 +414,12 @@ void mergeWarped_N(unsigned short **warpedColorViews, float **DispTargs, view *v
 		for (int ik = 0; ik < n_views; ik++){
 			unsigned short *ps = warpedColorViews[ik];
 			for (int icomp = 0; icomp < 3; icomp++){
-				AA1[ii + icomp*nr*nc] = AA1[ii + icomp*nr*nc] + LSw[ci + ik * MMM] * ((float)(*(ps + ii + icomp*nr*nc)));
+				AA1[ii + icomp*nr*nc] += LSw[ci + ik * MMM] * ((float)(*(ps + ii + icomp*nr*nc)));
 			}
+		}
+
+		for (int icomp = 0; icomp < 3; icomp++) {
+			AA1[ii + icomp*nr*nc] += LSw[ci + n_views * MMM];
 		}
 
 		for (int icomp = 0; icomp < 3; icomp++){
@@ -391,7 +428,7 @@ void mergeWarped_N(unsigned short **warpedColorViews, float **DispTargs, view *v
 			if (AA1[ii + icomp*nr*nc] > (1 << BIT_DEPTH) - 1)//(pow(2, BIT_DEPTH) - 1))
 				AA1[ii + icomp*nr*nc] = (1 << BIT_DEPTH) - 1;// (pow(2, BIT_DEPTH) - 1);
 
-			AA2[ii + icomp*nr*nc] = (unsigned short)(floor(AA1[ii + icomp*nr*nc]));
+			AA2[ii + icomp*nr*nc] = (unsigned short)(floor(AA1[ii + icomp*nr*nc] + 0.5));
 
 		}
 	}

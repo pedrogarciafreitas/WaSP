@@ -376,6 +376,7 @@ int main(int argc, char** argv) {
 			SAI->use_motion_vectors = true;
 
 			/* loop through all views that use this current view (SAI) as a reference. compute motion vectors for regions */
+
 			for (int vi = 0; vi < n_views_total; vi++) {
 
 				for (int ef = 0; ef < (LF + vi)->n_depth_references; ef++) {
@@ -383,6 +384,7 @@ int main(int argc, char** argv) {
 						getMotionVectorsView0_to_View1(SAI, LF+vi);
 					}
 				}
+
 
 				for (int ef = 0; ef < (LF + vi)->n_references; ef++) {
 					if ((LF + vi)->references[ef] == ii) {
@@ -401,6 +403,7 @@ int main(int argc, char** argv) {
 
 		/* color prediction */
 		/* forward warp color */
+
 		if (SAI->n_references > 0) {
 
 			/* holds partial warped views for ii */
@@ -456,6 +459,116 @@ int main(int argc, char** argv) {
 				mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
 				/* hole filling for color*/
 				holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+				if (1) {
+					unsigned short *tmp_color = new unsigned short[SAI->nr*SAI->nc * 3]();
+					memcpy(tmp_color, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+
+					delete[](SAI->color);
+					SAI->color = new unsigned short[SAI->nr*SAI->nc * 3]();
+
+					view *SAI_tmp = new view[1]();
+
+					initView(SAI_tmp);
+
+					SAI_tmp->n_references = SAI->n_references;
+					SAI_tmp->references = new int[SAI->n_references]();
+					memcpy(SAI_tmp->references, SAI->references, sizeof(int)*SAI->n_references);
+
+					SAI_tmp->nr = SAI->nr;
+					SAI_tmp->nc = SAI->nc;
+
+					SAI_tmp->color = new unsigned short[SAI->nr*SAI->nc * 3]();
+
+
+					/* holds partial warped views for ii */
+					float **DispTargs_tmp = new float*[SAI->n_references]();
+					for (int ij = 0; ij < SAI_tmp->n_references; ij++)
+					{
+						DispTargs_tmp[ij] = new float[SAI->nr*SAI->nc]();
+					}
+
+					for (int iR = 0; iR < SAI->nregions; iR++) {
+
+						if (SAI->reg_histogram[iR] >= 256) {
+
+							for (int ij = 0; ij < SAI_tmp->n_references; ij++)
+							{
+
+								memcpy(DispTargs_tmp[ij], DispTargs[ij], sizeof(float)*SAI->nr*SAI->nc);
+
+								float *tmps = DispTargs_tmp[ij];
+								for (int iuj = 0; iuj < SAI->nr*SAI->nr; iuj++) {
+									if (SAI->label_im[iuj] != iR) {
+										tmps[iuj] = INIT_DISPARITY_VALUE;
+									}
+								}
+
+							}
+
+							initViewW(SAI_tmp, DispTargs_tmp);
+
+							getViewMergingLSWeights_N(SAI_tmp, warped_color_views, DispTargs_tmp, original_color_view);
+							/* merge color with prediction */
+							mergeWarped_N(warped_color_views, DispTargs_tmp, SAI_tmp, 3);
+							/* hole filling for color*/
+							//holefilling(SAI_tmp->color, 3, SAI->nr, SAI->nc, 0);
+
+							///* clean */
+							//for (int ij = 0; ij < SAI_tmp->n_references; ij++)
+							//{
+							//	delete[](DispTargs_tmp[ij]);
+							//}
+							//delete[](DispTargs_tmp);
+
+							for (int iuj = 0; iuj < SAI->nr*SAI->nr; iuj++) {
+								if (SAI->label_im[iuj] == iR) {
+									SAI->color[iuj] = SAI_tmp->color[iuj];
+									SAI->color[iuj + SAI->nr*SAI->nc] = SAI_tmp->color[iuj + SAI->nr*SAI->nc];
+									SAI->color[iuj + SAI->nr*SAI->nc * 2] = SAI_tmp->color[iuj + SAI->nr*SAI->nc * 2];
+								}
+							}
+
+
+							delete[](SAI_tmp->seg_vp);
+							SAI_tmp->seg_vp = NULL;
+							delete[](SAI_tmp->merge_weights);
+							SAI_tmp->merge_weights = NULL;
+							delete[](SAI_tmp->merge_weights_float);
+							SAI_tmp->merge_weights_float = NULL;
+							delete[](SAI_tmp->bmask);
+							SAI_tmp->bmask = NULL;
+							delete[](SAI_tmp->number_of_pixels_per_region);
+							SAI_tmp->number_of_pixels_per_region = NULL;
+
+
+							printf("\tiR %i", iR);
+						}
+
+					}
+
+					delete[](SAI_tmp->references);
+					delete[](SAI_tmp->color);
+					delete[](SAI_tmp);
+
+					/* clean */
+					for (int ij = 0; ij < SAI_tmp->n_references; ij++)
+					{
+						delete[](DispTargs_tmp[ij]);
+					}
+					delete[](DispTargs_tmp);
+
+					///* hole filling for color*/
+					//holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+					for (int ijj = 0; ijj < SAI->nr*SAI->nc; ijj++) {
+						if (SAI->color[ijj] > 0 || SAI->color[ijj + SAI->nr*SAI->nc] > 0 || SAI->color[ijj + 2 * SAI->nr*SAI->nc]) {
+							tmp_color[ijj] = SAI->color[ijj];
+							tmp_color[ijj + SAI->nr*SAI->nc] = SAI->color[ijj + SAI->nr*SAI->nc];
+							tmp_color[ijj + SAI->nr*SAI->nc * 2] = SAI->color[ijj + SAI->nr*SAI->nc * 2];
+						}
+					}
+					memcpy(SAI->color, tmp_color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+					delete[](tmp_color);
+				}
 			}
 			else {
 				/* get baseline with median, we then study whether weighting improves */
@@ -796,34 +909,41 @@ int main(int argc, char** argv) {
 					rate_a1 = (float)YUV_RATIO_DEFAULT;
 				}
 
-				unsigned short *tmpim = new unsigned short[SAI->nr*SAI->nc * 3]();
-				memcpy(tmpim, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+				unsigned short *tmpim_w_yuv = new unsigned short[SAI->nr*SAI->nc * 3]();
+				memcpy(tmpim_w_yuv, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
 
 				encodeResidualJP2_YUV(SAI->nr, SAI->nc, original_color_view, SAI->color, ycbcr_pgm_names,
 					kdu_compress_path, ycbcr_jp2_names, SAI->residual_rate_color, 3, offset_v, rate_a1 / (float)8.0, RESIDUAL_16BIT_bool);
 
-				decodeResidualJP2_YUV(SAI->color, kdu_expand_path, ycbcr_jp2_names, ycbcr_pgm_names, 3, offset_v, (1<<BIT_DEPTH) - 1, RESIDUAL_16BIT_bool);
+				decodeResidualJP2_YUV(tmpim_w_yuv, kdu_expand_path, ycbcr_jp2_names, ycbcr_pgm_names, 3, offset_v, (1<<BIT_DEPTH) - 1, RESIDUAL_16BIT_bool);
+
+				double psnr_result_yuv_w_trans = getYCbCr_422_PSNR(tmpim_w_yuv, original_color_view, SAI->nr, SAI->nc, 3, 10);
 
 				/* also compete against no yuv transformation */
 
-				double psnr_result_yuv_w_trans = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, 10);
-
 				offset_v = (1<<BIT_DEPTH) - 1;
 
-				encodeResidualJP2(SAI->nr, SAI->nc, original_color_view, tmpim, ppm_residual_path,
+				unsigned short *tmpim_wo_yuv = new unsigned short[SAI->nr*SAI->nc * 3]();
+				memcpy(tmpim_wo_yuv, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+
+				encodeResidualJP2(SAI->nr, SAI->nc, original_color_view, tmpim_wo_yuv, ppm_residual_path,
 					kdu_compress_path, jp2_residual_path_jp2, SAI->residual_rate_color, 3, offset_v, RESIDUAL_16BIT_bool);
 
-				decodeResidualJP2(tmpim, kdu_expand_path, jp2_residual_path_jp2, ppm_residual_path, ncomp1, offset_v, offset_v, RESIDUAL_16BIT_bool);
+				decodeResidualJP2(tmpim_wo_yuv, kdu_expand_path, jp2_residual_path_jp2, ppm_residual_path, ncomp1, offset_v, offset_v, RESIDUAL_16BIT_bool);
 
-				double psnr_result_yuv_wo_trans = getYCbCr_422_PSNR(tmpim, original_color_view, SAI->nr, SAI->nc, 3, 10);
+				double psnr_result_yuv_wo_trans = getYCbCr_422_PSNR(tmpim_wo_yuv, original_color_view, SAI->nr, SAI->nc, 3, 10);
 
 				if (psnr_result_yuv_wo_trans > psnr_result_yuv_w_trans) {
-					memcpy(SAI->color, tmpim, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+					memcpy(SAI->color, tmpim_wo_yuv, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
 					SAI->yuv_transform = false;
 					rate_a1 = 0.0;
 				}
+				else {
+					memcpy(SAI->color, tmpim_w_yuv, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+				}
 
-				delete[](tmpim);
+				delete[](tmpim_wo_yuv);
+				delete[](tmpim_w_yuv);
 
 			}
 			else {

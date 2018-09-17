@@ -111,15 +111,15 @@ void warpView0_to_View1(view *view0, view *view1, unsigned short *&warpedColor, 
 
 		if (ixnew >= 0 && ixnew < view0->nc && iynew >= 0 && iynew < view0->nr) {
 			int indnew = iynew + ixnew*view0->nr;
-			if (DispTarg[indnew] < disp) { /* Bug fix from VM1.0. Since we use also negative disparity,
-										   but the largest positive value still represents nearest pixel,
-										   we should compare against disp not disp0.*/
+			//if (DispTarg[indnew] < disp) { /* Bug fix from VM1.0. Since we use also negative disparity,
+										   //but the largest positive value still represents nearest pixel,
+										   //we should compare against disp not disp0.*/
 				DispTarg[indnew] = disp;
 				warpedColor[indnew] = AA1[ij];
 				warpedColor[indnew + view0->nr*view0->nc] = AA1[ij + view0->nr*view0->nc];
 				warpedColor[indnew + 2 * view0->nr*view0->nc] = AA1[ij + 2 * view0->nr*view0->nc];
 				warpedDepth[indnew] = DD1[ij];
-			}
+			//}
 		}
 
 	}

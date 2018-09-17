@@ -347,6 +347,8 @@ void getMotionVectorsView0_to_View1(view *view0, view *view1) {
 		match_score[ik] = new float*[search_radius * 2 + 1]();
 		for (int isr = 0; isr < search_radius * 2 + 1; isr++) {
 			match_score[ik][isr] = new float[search_radius * 2 + 1]();
+			match_score[ik][isr][0] = FLT_MAX;
+			match_score[ik][isr][1] = FLT_MAX;
 		}
 	}
 
@@ -415,10 +417,17 @@ void getMotionVectorsView0_to_View1(view *view0, view *view1) {
 
 			warpSubscripts_from_View0_to_View1_int(view0, view1, iy, ix, iy1, ix1);
 
-//#pragma omp parallel for
-			for (int isr = -search_radius; isr <= search_radius; isr++) {
-				for (int isc = -search_radius; isc <= search_radius; isc++) {
+			int init_dx = abs(iy - iy1)/5;
+			int init_dy = abs(ix - ix1)/5;
 
+			init_dx = init_dx < 1 ? 1 : init_dx;
+			init_dy = init_dy < 1 ? 1 : init_dy;
+
+#pragma omp parallel for
+			for (int isr = -search_radius; isr <= search_radius; isr++) {
+				if (abs(isr) > init_dy ) { continue;  }
+				for (int isc = -search_radius; isc <= search_radius; isc++) {
+					if (abs(isc) > init_dx ) { continue; }
 					int iy11 = iy1 + isr;
 					int ix11 = ix1 + isc;
 
@@ -502,9 +511,9 @@ void getMotionVectorsView0_to_View1(view *view0, view *view1) {
 
 		view0->mv_views.push_back(tmp_mv_reg);
 
-		for (int iR = 0; iR < mv_regions.size(); iR++) {
+		/*for (int iR = 0; iR < mv_regions.size(); iR++) {
 			printf("iR=%i\tdy=%i\tdx=%i\n", mv_regions.at(iR).iR, mv_regions.at(iR).dy, mv_regions.at(iR).dx);
-		}
+		}*/
 
 	}
 

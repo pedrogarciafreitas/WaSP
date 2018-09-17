@@ -246,7 +246,7 @@ int FastOLS_new(double **AAA, double **Ydd, int *PredRegr0, double *PredTheta0, 
 			sabsval = sabsval - PredTheta0[i];
 	}
 	//printf("%f\n", sabsval);
-	if (sabsval > 2 * Ms) // if average coefficients are too high forget about intrpolation
+	if (sabsval > 50)// 2*Ms) // if average coefficients are too high forget about intrpolation
 	{
 		PredTheta0[0] = C[0 + MT*M];//g[0] = C[0,MT];
 
@@ -528,7 +528,7 @@ int FastOLS_new(double *AA, double *Yd, int *PredRegr0, double *PredTheta0, cons
 			sabsval = sabsval - PredTheta0[i];
 	}
 	//printf("%f\n", sabsval);
-	if (sabsval > 2 * Ms) // if average coefficients are too high forget about intrpolation
+	if (sabsval > 50)//2 * Ms) // if average coefficients are too high forget about intrpolation
 	{
 		PredTheta0[0] = C[0 + MT*M];//g[0] = C[0,MT];
 

@@ -221,7 +221,7 @@ void decodeResidualJP2(unsigned short *ps, const char *kdu_expand_path, const ch
 }
 
 void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char *ycbcr_jp2_names[], char *ycbcr_pgm_names[], const int ncomp, const int offset, const int maxvali,
-	const bool RESIDUAL_16BIT_bool)
+	const bool RESIDUAL_16BIT_bool, const int ncomp_rec)
 {
 	/* decode residual with kakadu */
 	char kdu_expand_s[1024];
@@ -241,7 +241,7 @@ void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char
 
 	int nc1, nr1,ncomp1;
 
-	for (int icomp = 0; icomp < ncomp; icomp++) {
+	for (int icomp = 0; icomp < ncomp_rec; icomp++) {
 		if (aux_read16PGMPPM(ycbcr_pgm_names[icomp], nc1, nr1, ncomp1, jp2_residual))
 		{
 			if (ycbcr == NULL) {
@@ -331,7 +331,7 @@ unsigned short *getResidual(const int nr, const int nc, const int ncomp, unsigne
 
 void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_intermediate_view, unsigned short *ps, char *ycbcr_pgm_names[],
 	const char *kdu_compress_path, char *ycbcr_jp2_names[], const float residual_rate, const int ncomp, const int offset, float rate_a,
-	const bool RESIDUAL_16BIT_bool)
+	const bool RESIDUAL_16BIT_bool, const int ncomp_rec)
 {
 	///*establish residual*/
 	//unsigned short *residual_image = new unsigned short[nr*nc * ncomp]();
@@ -375,7 +375,7 @@ void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_
 
 	unsigned short *tmp_im = new unsigned short[nr*nc]();
 
-	for (int icomp = 0; icomp < ncomp; icomp++) {
+	for (int icomp = 0; icomp < ncomp_rec; icomp++) {
 
 		float rateR = residual_rate;
 

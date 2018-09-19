@@ -2,7 +2,7 @@
 #define MOTIONCOMPENSATION_HH
 
 #define MOTION_VECTORS false
-#define MV_REG_MIN_SIZE 4096
+#define MV_REG_MIN_SIZE 1024
 #define MV_MAX_REGS 1024
 //#define MIN_RADIUS 6 
 #define MV_SEARCH_RADIUS 32

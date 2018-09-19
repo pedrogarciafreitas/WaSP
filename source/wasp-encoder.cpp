@@ -29,9 +29,9 @@
 
 #define USE_difftest_ng false
 
-#define YUV_SEARCH_LOW 6.80f
-#define YUV_SEARCH_HIGH 7.80f
-#define YUV_SEARCH_STEP 0.20f
+#define YUV_SEARCH_LOW 7.0f
+#define YUV_SEARCH_HIGH 8.0f
+#define YUV_SEARCH_STEP 0.10f
 #define YUV_RATIO_DEFAULT 7.20f
 
 #define STD_SEARCH_LOW 10
@@ -459,7 +459,7 @@ int main(int argc, char** argv) {
 				mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
 				/* hole filling for color*/
 				holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
-				if (1) {
+				if (0) {
 					unsigned short *tmp_color = new unsigned short[SAI->nr*SAI->nc * 3]();
 					memcpy(tmp_color, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
 
@@ -888,10 +888,14 @@ int main(int argc, char** argv) {
 
 						memcpy(tmp_im, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
 
-						encodeResidualJP2_YUV(SAI->nr, SAI->nc, original_color_view, tmp_im, ycbcr_pgm_names,
-							kdu_compress_path, ycbcr_jp2_names, SAI->residual_rate_color, 3, offset_v, rate_a / 8.0f, RESIDUAL_16BIT_bool);
+						int ncomp_rec = 3;// abs(rate_a - 8.0f) < YUV_SEARCH_STEP ? 1 : 3;
 
-						decodeResidualJP2_YUV(tmp_im, kdu_expand_path, ycbcr_jp2_names, ycbcr_pgm_names, 3, offset_v, (1<<BIT_DEPTH) - 1, RESIDUAL_16BIT_bool);
+						encodeResidualJP2_YUV(SAI->nr, SAI->nc, original_color_view, tmp_im, ycbcr_pgm_names,
+							kdu_compress_path, ycbcr_jp2_names, SAI->residual_rate_color, 3, offset_v, rate_a / 8.0f, 
+							RESIDUAL_16BIT_bool, ncomp_rec);
+
+						decodeResidualJP2_YUV(tmp_im, kdu_expand_path, ycbcr_jp2_names, ycbcr_pgm_names, 3, offset_v, 
+							(1<<BIT_DEPTH) - 1, RESIDUAL_16BIT_bool, ncomp_rec);
 
 						double psnr_result_yuv = getYCbCr_422_PSNR(tmp_im, original_color_view, SAI->nr, SAI->nc, 3, 10);
 
@@ -912,16 +916,18 @@ int main(int argc, char** argv) {
 				unsigned short *tmpim_w_yuv = new unsigned short[SAI->nr*SAI->nc * 3]();
 				memcpy(tmpim_w_yuv, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
 
-				encodeResidualJP2_YUV(SAI->nr, SAI->nc, original_color_view, SAI->color, ycbcr_pgm_names,
-					kdu_compress_path, ycbcr_jp2_names, SAI->residual_rate_color, 3, offset_v, rate_a1 / (float)8.0, RESIDUAL_16BIT_bool);
+				int ncomp_rec = 3;// abs(rate_a1 - 8.0f) < YUV_SEARCH_STEP ? 1 : 3;
 
-				decodeResidualJP2_YUV(tmpim_w_yuv, kdu_expand_path, ycbcr_jp2_names, ycbcr_pgm_names, 3, offset_v, (1<<BIT_DEPTH) - 1, RESIDUAL_16BIT_bool);
+				encodeResidualJP2_YUV(SAI->nr, SAI->nc, original_color_view, tmpim_w_yuv, ycbcr_pgm_names,
+					kdu_compress_path, ycbcr_jp2_names, SAI->residual_rate_color, 3, offset_v, rate_a1 / (float)8.0, RESIDUAL_16BIT_bool, 
+					ncomp_rec);
+
+				decodeResidualJP2_YUV(tmpim_w_yuv, kdu_expand_path, ycbcr_jp2_names, ycbcr_pgm_names, 3, offset_v, (1<<BIT_DEPTH) - 1, 
+					RESIDUAL_16BIT_bool, ncomp_rec);
 
 				double psnr_result_yuv_w_trans = getYCbCr_422_PSNR(tmpim_w_yuv, original_color_view, SAI->nr, SAI->nc, 3, 10);
 
 				/* also compete against no yuv transformation */
-
-				offset_v = (1<<BIT_DEPTH) - 1;
 
 				unsigned short *tmpim_wo_yuv = new unsigned short[SAI->nr*SAI->nc * 3]();
 				memcpy(tmpim_wo_yuv, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);

@@ -190,6 +190,43 @@ int main(int argc, char** argv) {
 	}
 	fclose(filept);
 
+	/* Here we obtain the hierchical level of the view. 
+	We obtain the level by inspecting which views are used as references for a given view.
+	Since only lower levels can be used as references, we can infer the level of the current view.*/
+	int *hierarchy_matrix = new int[maxR*maxC]();
+	for (int ii = 0; ii < n_views_total; ii++) {
+
+		view *SAI = (LF + ii);
+
+		/* here we collect the maximum level appearing in the set of references of SAI*/
+		int max_level = 0; 
+
+		for (int jj = 0; jj < SAI->n_references; jj++) {
+			view *ref_SAI = (LF + SAI->references[jj]);
+			int hval = hierarchy_matrix[ref_SAI->r + maxR*ref_SAI->c];
+			max_level = hval > max_level ? hval : max_level;
+		}
+
+		hierarchy_matrix[SAI->r + maxR*SAI->c] = max_level +1;
+		SAI->level = hierarchy_matrix[SAI->r + maxR*SAI->c];
+
+	}
+
+	/* print hierarchy matrix for debug */
+	printf("\n");
+	for (int rr = 0; rr < maxR; rr++) {
+		for (int cc = 0; cc < maxC; cc++) {
+			printf("%i\t", hierarchy_matrix[rr + maxR*cc]);
+		}
+		printf("\n");
+	}
+
+	//for (int ii = 0; ii < n_views_total; ii++) {
+	//	printf("%i\n", (LF+ii)->level);
+	//}
+
+	exit(0);
+
 	/* 2D array format for views, useful in some cases */
 	view ***LF_mat = new view**[maxR]();
 	for (int ii = 0; ii < maxR; ii++) {

@@ -92,6 +92,8 @@ struct view{
 
 	std::vector< std::pair< unsigned short, std::vector< MV_REGION > > > mv_views; /* first one is view index, second contains vector of regions for that view */
 
+	int level;
+
 };
 
 void initView(view* view);

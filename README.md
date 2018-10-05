@@ -1,4 +1,4 @@
-# WaSP light field compression
+# WaSP light field compression **(OPJ version)**
 
 ## Introduction
 
@@ -12,37 +12,27 @@ This software has been developed and tested on Windows 7,10 and has mostly been 
 
 to build both encoder and decoder.
 
-### Kakadu installation on Linux
+### OpenJPEG
 
-Residual encoding is currently done by JPEG2000 and for that we use the Kakadu Software.
-
-[Download Kakadu for Linux](http://kakadusoftware.com/downloads/) and see Kakadu's README.txt for instructions regarding **LD\_LIBRARY\_PATH**. 
-
-If you encounter the error *"kakadu/kdu_compress: /usr/lib/x86_64-linux-gnu/libstdc++.so.6: version `GLIBCXX_3.4.21'* not found" do the following,
-
->sudo add-apt-repository ppa:ubuntu-toolchain-r/test
- 
->sudo apt-get update
-
->sudo apt-get install libstdc++6
+Residual encoding is currently done by JPEG2000, and for that we use the OpenJPEG 2000. [Download opj_compress and opj_decompress](https://github.com/uclouvain/openjpeg/releases/) 
 
 ## Demo
 
 An [encoding of the I01_Bikes at rate 0.75 bpp](http://www.cs.tut.fi/~astolap/WaSP/github_demo/I01_Bikes-169_41.9343_0.74902.LF) is provided as an example for the decoder. You can run the decoder with,
 
->./wasp-decoder-bin /path/to/I01_Bikes-169_41.9343_0.74902.LF /path/to/output /path/to/Kakadu/
+>./wasp-decoder-bin /path/to/I01_Bikes-169_41.9343_0.74902.LF /path/to/output /path/to/opj/
 
 For encoding a [sample configuration file](http://www.cs.tut.fi/~astolap/WaSP/github_demo/I01_Bikes-169_41.9343_0.74902.conf) is provided for the same I01_Bikes encoding. Download [inverse depth for Lytro dataset](http://www.cs.tut.fi/~astolap/WaSP/Lytro_inverse_depth.zip) before attempting to run the encoder. Place the inverse depth .pgm files in the directory containing the original .ppm files. You can run the encoder with,
 
->./wasp-encoder-bin /path/to/original_images/ /path/to/output/directory /path/to/Kakadu/ /path/to/I01_Bikes-169_41.9343_0.74902.conf
+>./wasp-encoder-bin /path/to/original_images/ /path/to/output/directory /path/to/opj/ /path/to/I01_Bikes-169_41.9343_0.74902.conf
 
 ## Running the encoder
 
-Encoder takes four arguments: path to input images, path to output directory, path to Kakadu directory and path to the configuration file. 
+Encoder takes four arguments: path to input images, path to output directory, path to opj directory and path to the configuration file. 
 
 Encoder assumes that the images are named using col_row.ppm in %03d format, for example view row=7,col=3 should be in a file named **003\_007.ppm**. For the UNSW style inverse depths, the encoder assumes that depth files are named as **003\_007.pgm** and are found in the same folder as the color images.
 
-Encoder also assumes that the directory pointing to Kakadu installation contains **kdu_compress** and **kdu_expand** executables.
+Encoder also assumes that the directory pointing to opj installation contains **opj_compress** and **opj_decompress** executables.
 
 ### Configuration file
 
@@ -98,7 +88,7 @@ The encoder outputs to the bitstream **output.LF** in the output directory. Addi
 
 ## Running the decoder
 
-The decoder takes three arguments: path to input file (for example path to the output.LF file), directory for outputting the decoded images (.ppm and .pgm) and path to the directory containing Kakadu executables.
+The decoder takes three arguments: path to input file (for example path to the output.LF file), directory for outputting the decoded images (.ppm and .pgm) and path to the directory containing opj executables.
 
 ## References
 

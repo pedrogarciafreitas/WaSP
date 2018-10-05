@@ -53,6 +53,7 @@ void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char
 	char kdu_expand_s[1024];
 
 	for (int icomp = 0; icomp < ncomp; icomp++) {
+		//sprintf(kdu_expand_s, "\"%s\"%s%s%s%s", kdu_expand_path, " -i ", ycbcr_jp2_names[icomp], " -o ", ycbcr_pgm_names[icomp]);
 		sprintf(kdu_expand_s, "\"%s\"%s%s%s%s", kdu_expand_path, " -i ", ycbcr_jp2_names[icomp], " -o ", ycbcr_pgm_names[icomp]);
 		int status = system_1(kdu_expand_s);
 		if (status < 0) {
@@ -185,9 +186,12 @@ void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_
 		}
 
 		char kdu_compress_s[1024];
-	
-		sprintf(kdu_compress_s, "\"%s\"%s%s%s%s%s%f%s%d", kdu_compress_path, " -i ", ycbcr_pgm_names[icomp], " -o ", ycbcr_jp2_names[icomp], " -no_weights -no_info -precise -rate ", rateR,
-			" Clevels=",CLEVELS);
+
+		float CR = ((RESIDUAL_16BIT_bool ? 16 : 10) * ncomp) / residual_rate;
+		sprintf(kdu_compress_s, "\"%s\"%s%s%s%s%s%f", kdu_compress_path, " -i ", ycbcr_pgm_names[icomp], " -o ", ycbcr_jp2_names[icomp], " -r ", CR);
+
+		//sprintf(kdu_compress_s, "\"%s\"%s%s%s%s%s%f%s%d", kdu_compress_path, " -i ", ycbcr_pgm_names[icomp], " -o ", ycbcr_jp2_names[icomp], " -no_weights -no_info -precise -rate ", rateR,
+			//" Clevels=",CLEVELS);
 
 		int status = system_1(kdu_compress_s);
 
@@ -228,9 +232,13 @@ void encodeResidualJP2(const int nr, const int nc, unsigned short *original_inte
 
 	/* here encode residual with kakadu */
 
+	float CR = ( (RESIDUAL_16BIT_bool?16:10) * ncomp) / residual_rate;
+
 	char kdu_compress_s[1024]; // tolerance 0 ?
-	sprintf(kdu_compress_s, "\"%s\"%s%s%s%s%s%f%s%d", kdu_compress_path, " -i ", ppm_residual_path, " -o ", jp2_residual_path_jp2, " -no_weights -no_info -precise -rate ", residual_rate,
-		" Clevels=", CLEVELS);
+	/*sprintf(kdu_compress_s, "\"%s\"%s%s%s%s%s%f%s%d", kdu_compress_path, " -i ", ppm_residual_path, " -o ", jp2_residual_path_jp2, " -no_weights -no_info -precise -rate ", residual_rate,
+		" Clevels=", CLEVELS);*/
+
+	sprintf(kdu_compress_s, "\"%s\"%s%s%s%s%s%f", kdu_compress_path, " -i ", ppm_residual_path, " -o ", jp2_residual_path_jp2, " -r ", CR);
 
 	//std::cout << kdu_compress_s << "\n";
 

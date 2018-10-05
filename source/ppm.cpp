@@ -12,7 +12,7 @@ bool aux_read16PGMPPM(const char* filename, int &width, int &height, int &ncomp,
 
 	int  max, x, y;
 	int red, green, blue;
-	char dummy[100];
+	char dummy[100], tmpc;
 
 	unsigned short *Image16bit = NULL;
 
@@ -27,6 +27,17 @@ bool aux_read16PGMPPM(const char* filename, int &width, int &height, int &ncomp,
 
 
 	fscanf(filept, "%s", dummy);
+
+	fscanf(filept, "%c", &tmpc);
+	fscanf(filept, "%c", &tmpc);
+
+	if (tmpc == 0x23) { /* opj comment line in .ppm */
+		fseek(filept, 15, SEEK_CUR);
+	}
+	else {
+		fseek(filept, -1, SEEK_CUR);
+	}
+
 	fscanf(filept, "%d %d\n", &width, &height);
 	fscanf(filept, "%d", &max);
 	fgetc(filept);

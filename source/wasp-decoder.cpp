@@ -31,7 +31,7 @@ int main(int argc, char** argv) {
 
 	char kdu_expand_path[1024];
 
-	sprintf(kdu_expand_path, "%s%s", kakadu_dir, "/kdu_expand");
+	sprintf(kdu_expand_path, "%s%s", kakadu_dir, "/opj_decompress");
 
 	FILE *input_LF;
 	input_LF = fopen(input_file, "rb");

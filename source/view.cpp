@@ -57,4 +57,7 @@ void initView(view* view)
 
 	view->has_chrominance = false;
 
+	//view->n_rdo_dense = 0;
+	view->delta_r = 0;
+
 }

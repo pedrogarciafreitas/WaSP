@@ -181,6 +181,7 @@ void writeResidualToDisk(const char *jp2_residual_path_jp2, FILE *output_LF_file
 	}
 
 	delete[](jp2_residual);
+	jp2_residual = NULL;
 	
 }
 
@@ -216,6 +217,7 @@ void decodeResidualJP2(unsigned short *ps, const char *kdu_expand_path, const ch
 		}
 
 		delete[](jp2_residual);
+		jp2_residual = NULL;
 	}
 }
 
@@ -266,6 +268,7 @@ void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char
 			
 
 			delete[](jp2_residual);
+			jp2_residual = NULL;
 		}
 	}
 
@@ -359,7 +362,7 @@ void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_
 
 		char kdu_compress_s[1024];
 	
-		sprintf(kdu_compress_s, "\"%s\"%s%s%s%s%s%f%s%d", kdu_compress_path, " -i ", ycbcr_pgm_names[icomp], " -o ", ycbcr_jp2_names[icomp], " -no_weights -full -no_info -precise -rate ", rateR,
+		sprintf(kdu_compress_s, "\"%s\"%s%s%s%s%s%f%s%d", kdu_compress_path, " -i ", ycbcr_pgm_names[icomp], " -o ", ycbcr_jp2_names[icomp], " -num_threads 0 -no_weights -full -no_info -precise -rate ", rateR,
 			" Clevels=",CLEVELS);
 
 		int status = system_1(kdu_compress_s);
@@ -402,7 +405,7 @@ void encodeResidualJP2(const int nr, const int nc, unsigned short *original_inte
 	/* here encode residual with kakadu */
 
 	char kdu_compress_s[1024]; // tolerance 0 ?
-	sprintf(kdu_compress_s, "\"%s\"%s%s%s%s%s%f%s%d", kdu_compress_path, " -i ", ppm_residual_path, " -o ", jp2_residual_path_jp2, " -no_weights -full -no_info -precise -rate ", residual_rate,
+	sprintf(kdu_compress_s, "\"%s\"%s%s%s%s%s%f%s%d", kdu_compress_path, " -i ", ppm_residual_path, " -o ", jp2_residual_path_jp2, " -num_threads 0 -no_weights -full -no_info -precise -rate ", residual_rate,
 		" Clevels=", CLEVELS);
 
 	//std::cout << kdu_compress_s << "\n";

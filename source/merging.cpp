@@ -14,9 +14,11 @@ void setBMask(view *view0)
 
 	int MMM = 1 << view0->n_references;// pow(2, view0->n_references);
 
-	bool *bmask = new bool[MMM * view0->n_references]();
+	if (view0->bmask != NULL) {
+		delete[](view0->bmask);
+	}
 
-	(view0)->bmask = bmask;
+	view0->bmask = new bool[MMM * view0->n_references]();
 
 	for (int ij = 0; ij < MMM; ij++) {
 
@@ -29,7 +31,7 @@ void setBMask(view *view0)
 			{
 				//uu = uu - pow(2, ik);
 				uu = uu - (1<<ik);
-				bmask[ij + ik * MMM] = 1;
+				view0->bmask[ij + ik * MMM] = 1;
 			}
 
 		}
@@ -229,9 +231,13 @@ void initSegVp(view *view0, float **DispTargs) {
 	int nc = view0->nc;
 	int n_references = view0->n_references;
 
+	if (view0->seg_vp != NULL) {
+		delete[](view0->seg_vp);
+	}
+
 	unsigned short *seg_vp = new unsigned short[nr*nc]();
 
-	(view0)->seg_vp = seg_vp;
+	view0->seg_vp = seg_vp;
 
 	int MMM = 1 << view0->n_references;// pow(2, (view0)->n_references);
 
@@ -253,6 +259,10 @@ void initSegVp(view *view0, float **DispTargs) {
 
 	}
 
+	if (view0->number_of_pixels_per_region != NULL) {
+		delete[](view0->number_of_pixels_per_region);
+	}
+
 	view0->number_of_pixels_per_region = number_of_pixels_per_region;
 }
 
@@ -260,16 +270,19 @@ void initViewW(view *view0, float **DispTargs) {
 
 	/* sets some of the parameters for a view in the light view structure */
 
-	(view0)->NB = (1 << view0->n_references)*view0->n_references; // (pow(2, (view0)->n_references)*(view0)->n_references);
+	view0->NB = (1 << view0->n_references)*view0->n_references; // (pow(2, (view0)->n_references)*(view0)->n_references);
 	
-	if ((view0)->merge_weights == NULL) {
-		signed short *merge_weights = new signed short[(view0)->NB / 2]();
-		(view0)->merge_weights = merge_weights;
+	if ((view0)->merge_weights != NULL) {
+		delete[](view0->merge_weights);
 	}
 
-	float *merge_weights_float = new float[(view0)->NB]();
+	if ((view0)->merge_weights_float != NULL) {
+		delete[](view0->merge_weights_float);
+	}
 
-	(view0)->merge_weights_float = merge_weights_float;
+	view0->merge_weights = new signed short[(view0)->NB / 2]();
+
+	view0->merge_weights_float = new float[(view0)->NB]();
 
 	setBMask(view0);
 

@@ -77,7 +77,7 @@ int main(int argc, char** argv) {
 
 	const bool RESIDUAL_16BIT_bool = RESIDUAL_16BIT ? 1 : 0;
 
-	int yuv_transform_s,yuv_ratio_search_s,std_search_s;
+	int yuv_transform_s, yuv_ratio_search_s, std_search_s;
 	fread(&yuv_transform_s, sizeof(int), 1, filept); /*reading*/
 	fread(&yuv_ratio_search_s, sizeof(int), 1, filept); /*reading*/
 	fread(&std_search_s, sizeof(int), 1, filept); /*reading*/
@@ -100,20 +100,20 @@ int main(int argc, char** argv) {
 		fread(&(SAI->c), sizeof(int), 1, filept); /*reading*/
 
 		/* find number of rows and cols */
-		maxR = (SAI->r+1 > maxR) ? SAI->r + 1 : maxR;
-		maxC = (SAI->c+1 > maxC) ? SAI->c + 1 : maxC;
+		maxR = (SAI->r + 1 > maxR) ? SAI->r + 1 : maxR;
+		maxC = (SAI->c + 1 > maxC) ? SAI->c + 1 : maxC;
 
 		int xx = 0, yy = 0;
 
 		fread(&xx, sizeof(int), 1, filept); /*reading*/
 		fread(&yy, sizeof(int), 1, filept); /*reading*/
 
-		if ( abs(xx) > 0) {
+		if (abs(xx) > 0) {
 			SAI->has_x_displacement = true;
 			SAI->x = float(xx) / 100000;
 		}
 
-		if ( abs(yy) > 0) {
+		if (abs(yy) > 0) {
 			SAI->has_y_displacement = true;
 			SAI->y = float(yy) / 100000;
 		}
@@ -128,6 +128,10 @@ int main(int argc, char** argv) {
 
 		fread(&SAI->Ms, sizeof(int), 1, filept); /*reading*/
 		fread(&SAI->NNt, sizeof(int), 1, filept); /*reading*/
+
+		if (SAI->Ms > 0 && SAI->NNt > 0) {
+			SAI->use_global_sparse = true;
+		}
 
 		int stdd = 0;
 
@@ -176,6 +180,18 @@ int main(int argc, char** argv) {
 
 		fread(&SAI->has_segmentation, sizeof(int), 1, filept); // new,13.06.18 /*reading*/
 
+		//RDO stuff
+		int delta_r = 0;
+		fread(&delta_r, sizeof(int), 1, filept);
+		SAI->delta_r = static_cast<float>(delta_r) / 100000;
+
+		////fread(&SAI->n_rdo_dense, sizeof(int), 1, filept);
+		//for (int ij = 0; ij < SAI->n_rdo_dense; ij++) {
+		//	int tmp_rate = 0;
+		//	fread(&tmp_rate, sizeof(int), 1, filept);
+		//	SAI->rdo_dense_rates.push_back( static_cast<float>(tmp_rate) * 100000);
+		//}
+
 		sprintf(SAI->path_input_ppm, "%s%c%03d_%03d%s", input_dir, '/', SAI->c, SAI->r, ".ppm");
 		sprintf(SAI->path_input_pgm, "%s%c%03d_%03d%s", input_dir, '/', SAI->c, SAI->r, ".pgm");
 
@@ -189,6 +205,12 @@ int main(int argc, char** argv) {
 
 	char path_out_LF_data[1024];
 	sprintf(path_out_LF_data, "%s%c%s", output_dir, '/', "output.LF");
+
+	char path_out_RDO_statistics[1024];
+	sprintf(path_out_RDO_statistics, "%s%c%s", output_dir, '/', "rdo_statistics.stats");
+	FILE *rdo_statistics_file;
+	rdo_statistics_file = fopen(path_out_RDO_statistics, "w");
+	fclose(rdo_statistics_file);
 
 	/* debugging codestream overhead reduction */
 	char path_codestream[1024];
@@ -220,7 +242,7 @@ int main(int argc, char** argv) {
 
 
 	/* to get effiency from multiple JP2 files, we remove parts of the files
-	which are repetative over all files. For this we have a minimalistic 
+	which are repetative over all files. For this we have a minimalistic
 	dictionary method. */
 
 	std::vector<std::vector<unsigned char>> JP2_dict;
@@ -234,7 +256,7 @@ int main(int argc, char** argv) {
 		printf("Encoding view %03d_%03d\t", SAI->c, SAI->r);
 
 		//char output_results[1024];
-		memset(output_results, 0x00, sizeof(char) * sizeof(output_results)/sizeof(char));
+		memset(output_results, 0x00, sizeof(char) * sizeof(output_results) / sizeof(char));
 		output_buffer_length = 0;
 		output_buffer_length += sprintf(output_results + output_buffer_length, "%03d\t%03d", SAI->r, SAI->c);
 
@@ -244,22 +266,14 @@ int main(int argc, char** argv) {
 		int nc1, nr1, ncomp1;
 		aux_read16PGMPPM(SAI->path_input_ppm, SAI->nc, SAI->nr, ncomp1, original_color_view);
 
-		///* debug yuv */
-		//unsigned short *ycbcr = new unsigned short[SAI->nr*SAI->nc * 3]();
-		//RGB2YCbCr(original_color_view, ycbcr, SAI->nr, SAI->nc, 10);
-		//aux_write16PGMPPM("C:/Local/astolap/Data/JPEG_PLENO/TUT-HDCA_tmp_output_lenslet/YCbCr.ppm",
-		//	SAI->nc, SAI->nr, 3, ycbcr);
-		//unsigned short *rgb = new unsigned short[SAI->nr*SAI->nc * 3]();
-		//YCbCr2RGB(ycbcr, rgb, SAI->nr, SAI->nc, 10);
-		//aux_write16PGMPPM("C:/Local/astolap/Data/JPEG_PLENO/TUT-HDCA_tmp_output_lenslet/RGB.ppm",
-		//	SAI->nc, SAI->nr, 3, rgb);
-		////aux_write16PGMPPM("C:/Local/astolap/Data/JPEG_PLENO/TUT-HDCA_tmp_output_lenslet/original.ppm",
-		////	SAI->nc, SAI->nr, 3, original_color_view);
+		int rdo_buffer_this_view_length = 0;
+		char rdo_buffer_this_view[2048];
+		memset(rdo_buffer_this_view, 0x00, sizeof(char) * sizeof(rdo_buffer_this_view) / sizeof(char));
 
-		//exit(0);
+		rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "%d\n%d\n%d\n%f\n%f", ii, SAI->r, SAI->c, SAI->residual_rate_color, SAI->delta_r);
 
 		bool depth_file_exist = false;
-		
+
 		if (SAI->residual_rate_depth > 0) {
 			depth_file_exist = aux_read16PGMPPM(SAI->path_input_pgm, nc1, nr1, ncomp1, original_depth_view);
 		}
@@ -267,201 +281,234 @@ int main(int argc, char** argv) {
 		SAI->color = new unsigned short[SAI->nr*SAI->nc * 3]();
 		SAI->depth = new unsigned short[SAI->nr*SAI->nc]();
 
-		predictDepth(SAI,LF);
+		predictDepth(SAI, LF);
 
 		/* color prediction */
 		/* forward warp color */
+		rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%d", SAI->n_references);
+
 		if (SAI->n_references > 0) {
+			for (int ij_t = 0; ij_t < SAI->n_references+1; ij_t++) {
 
-			/* holds partial warped views for ii */
-			unsigned short **warped_color_views = new unsigned short*[SAI->n_references]();
-			unsigned short **warped_depth_views = new unsigned short*[SAI->n_references]();
-			float **DispTargs = new float*[SAI->n_references]();
+				
+				int maxq = 1;
 
-			for (int ij = 0; ij < SAI->n_references; ij++)
-			{
-
-				view *ref_view = LF + SAI->references[ij];
-
-				int tmp_w, tmp_r, tmp_ncomp;
-
-				aux_read16PGMPPM(ref_view->path_out_pgm, tmp_w, tmp_r, tmp_ncomp, ref_view->depth);
-				aux_read16PGMPPM(ref_view->path_out_ppm, tmp_w, tmp_r, tmp_ncomp, ref_view->color);
-
-				/* FORWARD warp color AND depth */
-				warpView0_to_View1(ref_view, SAI, warped_color_views[ij], warped_depth_views[ij], DispTargs[ij]);
-
-				delete[](ref_view->depth);
-				delete[](ref_view->color);
-
-				ref_view->depth = NULL;
-				ref_view->color = NULL;
-
-				char tmp_str[1024];
-
-				if (SAVE_PARTIAL_WARPED_VIEWS) {
-
-					sprintf(tmp_str, "%s/%03d_%03d%s%03d_%03d%s", output_dir, (ref_view)->c, (ref_view)->r, "_warped_to_", SAI->c, SAI->r, ".ppm");
-					aux_write16PGMPPM(tmp_str, SAI->nc, SAI->nr, 3, warped_color_views[ij]);
-
-					sprintf(tmp_str, "%s/%03d_%03d%s%03d_%03d%s", output_dir, (ref_view)->c, (ref_view)->r, "_warped_to_", SAI->c, SAI->r, ".pgm");
-					aux_write16PGMPPM(tmp_str, SAI->nc, SAI->nr, 1, warped_depth_views[ij]);
-
+				if (ij_t < SAI->n_references) {
+					maxq = 3;
+					view *tref_view = LF + SAI->references[ij_t];
+					rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%d\n%d\n%d", SAI->references[ij_t], tref_view->r, tref_view->c);
 				}
 
-				//FILE *tmpf;
-				//sprintf(tmp_str, "%s%03d_%03d%s%03d_%03d%s", output_dir, (ref_view)->c, (ref_view)->r, "_warped_to_", SAI->c, SAI->r, "_DispTarg.float");
-				//tmpf = fopen(tmp_str, "wb");
-				//fwrite(DispTargs[ij], sizeof(float), SAI->nr * SAI->nc, tmpf);
-				//fclose(tmpf);
+				for (int qi = 0; qi < maxq; qi++) { // qi = { 0 (nominal), 1 (-1), 2 (1) }
 
-			}
+					/* holds partial warped views for ii */
+					unsigned short **warped_color_views = new unsigned short*[SAI->n_references]();
+					unsigned short **warped_depth_views = new unsigned short*[SAI->n_references]();
+					float **DispTargs = new float*[SAI->n_references]();
 
-			initViewW(SAI, DispTargs);
+					memset(SAI->color, 0x00, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
 
-			/* get LS weights */
-			if (SAI->stdd < 0.0001) {
-				getViewMergingLSWeights_N(SAI, warped_color_views, DispTargs, original_color_view);
-				/* merge color with prediction */
-				mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
-				/* hole filling for color*/
-				holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
-			}
-			else {
-				/* get baseline with median, we then study whether weighting improves */
-				/* merge color with median */
-				int startt = clock();
-				mergeMedian_N(warped_color_views, DispTargs, SAI, 3);
-				std::cout << "time elapsed in color median merging\t" << (float)( (int)clock() - startt ) / CLOCKS_PER_SEC << "\n";
-				holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
 
-				//double psnr_med = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, 10);
-				double psnr_med = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, 10);
+					for (int ij = 0; ij < SAI->n_references; ij++)
+					{
 
-				unsigned short *tmp_m = new unsigned short[SAI->nr*SAI->nc*3]();
-				memcpy(tmp_m, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+						view *ref_view = LF + SAI->references[ij];
 
-				double psnr_w = 0;
+						int tmp_w, tmp_r, tmp_ncomp;
 
-				if (STD_SEARCH) {
+						char ref_ppm_path[1024];
 
-					float stdi = 0;
+						if (ij_t == ij) {	
+							sprintf(ref_ppm_path, "%s%c%03d_%03d%s%d%s", output_dir, '/', ref_view->c, ref_view->r, "_", qi, ".ppm");	
+						}
+						else {
+							sprintf(ref_ppm_path, "%s%c%03d_%03d%s%d%s", output_dir, '/', ref_view->c, ref_view->r, "_", 0, ".ppm"); // nominal
+						}
 
-					for (float stds = STD_SEARCH_LOW; stds < STD_SEARCH_HIGH; stds += STD_SEARCH_STEP) {
-						SAI->stdd = stds;
+						aux_read16PGMPPM(ref_ppm_path, tmp_w, tmp_r, tmp_ncomp, ref_view->color);
+						aux_read16PGMPPM(ref_view->path_out_pgm, tmp_w, tmp_r, tmp_ncomp, ref_view->depth);
+
+						/* FORWARD warp color AND depth */
+						warpView0_to_View1(ref_view, SAI, warped_color_views[ij], warped_depth_views[ij], DispTargs[ij]);
+
+						delete[](ref_view->depth);
+						delete[](ref_view->color);
+
+						ref_view->depth = NULL;
+						ref_view->color = NULL;
+
+						char tmp_str[1024];
+
+						if (SAVE_PARTIAL_WARPED_VIEWS) {
+
+							sprintf(tmp_str, "%s/%03d_%03d%s%03d_%03d%s", output_dir, (ref_view)->c, (ref_view)->r, "_warped_to_", SAI->c, SAI->r, ".ppm");
+							aux_write16PGMPPM(tmp_str, SAI->nc, SAI->nr, 3, warped_color_views[ij]);
+
+							sprintf(tmp_str, "%s/%03d_%03d%s%03d_%03d%s", output_dir, (ref_view)->c, (ref_view)->r, "_warped_to_", SAI->c, SAI->r, ".pgm");
+							aux_write16PGMPPM(tmp_str, SAI->nc, SAI->nr, 1, warped_depth_views[ij]);
+
+						}
+
+						//FILE *tmpf;
+						//sprintf(tmp_str, "%s%03d_%03d%s%03d_%03d%s", output_dir, (ref_view)->c, (ref_view)->r, "_warped_to_", SAI->c, SAI->r, "_DispTarg.float");
+						//tmpf = fopen(tmp_str, "wb");
+						//fwrite(DispTargs[ij], sizeof(float), SAI->nr * SAI->nc, tmpf);
+						//fclose(tmpf);
+
+					}
+
+					initViewW(SAI, DispTargs);
+
+					/* get LS weights */
+					if (SAI->stdd < 0.0001) {
+						getViewMergingLSWeights_N(SAI, warped_color_views, DispTargs, original_color_view);
+						/* merge color with prediction */
+						mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
+						/* hole filling for color*/
+						holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+					}
+					else {
+						/* get baseline with median, we then study whether weighting improves */
+						/* merge color with median */
+						int startt = clock();
+						mergeMedian_N(warped_color_views, DispTargs, SAI, 3);
+						std::cout << "time elapsed in color median merging\t" << (float)((int)clock() - startt) / CLOCKS_PER_SEC << "\n";
+						holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+
+						//double psnr_med = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, 10);
+						double psnr_med = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, 10);
+
+						unsigned short *tmp_m = new unsigned short[SAI->nr*SAI->nc * 3]();
+						memcpy(tmp_m, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+
+						double psnr_w = 0;
+
+						if (STD_SEARCH) {
+
+							float stdi = 0;
+
+							for (float stds = STD_SEARCH_LOW; stds < STD_SEARCH_HIGH; stds += STD_SEARCH_STEP) {
+								SAI->stdd = stds;
+								/* we don't use LS weights but something derived on geometric distance in view array*/
+								getGeomWeight(SAI, LF);
+								/* merge color with prediction */
+								mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
+								/* hole filling for color*/
+								holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+								double tpsnr = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
+								//double tpsnr = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, 10);
+
+								if (tpsnr > psnr_w) {
+									psnr_w = tpsnr;
+									stdi = SAI->stdd;
+								}
+
+							}
+
+							SAI->stdd = stdi;
+
+							printf("PSNR RGB median:%f\tPSNR RGB weights:%f\t SAI->std: %f\n", psnr_med, psnr_w, SAI->stdd);
+
+						}
+
 						/* we don't use LS weights but something derived on geometric distance in view array*/
 						getGeomWeight(SAI, LF);
 						/* merge color with prediction */
 						mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
 						/* hole filling for color*/
 						holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
-						double tpsnr = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
-						//double tpsnr = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, 10);
+						psnr_w = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
 
-						if (tpsnr > psnr_w) {
-							psnr_w = tpsnr;
-							stdi = SAI->stdd;
+						if (psnr_w < psnr_med) {
+							delete[](SAI->color);
+							SAI->color = tmp_m;
+							SAI->use_median = true;
+							SAI->stdd = 0.0;
 						}
-
+						else {
+							delete[](tmp_m);
+						}
 					}
 
-					SAI->stdd = stdi;
+					/* clean */
+					for (int ij = 0; ij < SAI->n_references; ij++)
+					{
+						delete[](warped_color_views[ij]);
+						delete[](warped_depth_views[ij]);
+						delete[](DispTargs[ij]);
+					}
 
-					printf("PSNR RGB median:%f\tPSNR RGB weights:%f\t SAI->std: %f\n", psnr_med, psnr_w, SAI->stdd);
+					delete[](warped_color_views);
+					delete[](warped_depth_views);
+					delete[](DispTargs);
 
+					double psnr_without_sparse = 0;
+
+					psnr_without_sparse = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
+
+					output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", psnr_without_sparse);
+
+					int q_qi = 0;
+					if (qi == 0) {
+						q_qi = 0;
+					}
+					if (qi == 1) {
+						q_qi = -1;
+					}
+					if (qi == 2) {
+						q_qi = 1;
+					}
+
+					if (ij_t < SAI->n_references) {
+						rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%d", q_qi);
+					}
+
+					double psnr_with_sparse = 0;
+
+					if (SAI->use_global_sparse)
+					{
+
+						unsigned short *colorview_temp = new unsigned short[SAI->nr*SAI->nc * 3]();
+						memcpy(colorview_temp, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+
+						int startt = clock();
+
+						getGlobalSparseFilter(SAI, original_color_view);
+
+						std::cout << "time elapsed in getGlobalSparseFilter()\t" << (float)( (int)clock() - startt ) / CLOCKS_PER_SEC << "\n";
+
+						applyGlobalSparseFilter(SAI);
+
+						psnr_with_sparse = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
+
+						if (psnr_with_sparse < psnr_without_sparse) //<0.1
+						{
+							SAI->use_global_sparse = false;
+							memcpy(SAI->color, colorview_temp, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+						}
+
+						output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", psnr_with_sparse);
+						if (ij_t < SAI->n_references) {
+							rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%f", psnr_with_sparse);
+						}
+
+						delete[](colorview_temp);
+
+					}
+					else {
+						output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", 0.0);
+						if (ij_t < SAI->n_references) {
+							rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%f", psnr_without_sparse);
+						}
+					}
+
+					
 				}
 
-				/* we don't use LS weights but something derived on geometric distance in view array*/
-				getGeomWeight(SAI, LF);
-				/* merge color with prediction */
-				mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
-				/* hole filling for color*/
-				holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
-				psnr_w = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
 
-				if (psnr_w < psnr_med) {
-					delete[](SAI->color);
-					SAI->color = tmp_m;
-					SAI->use_median = true;
-					SAI->stdd = 0.0;
-				}
-				else {
-					delete[](tmp_m);
-				}
-			}
-
-			/* clean */
-			for (int ij = 0; ij < SAI->n_references; ij++)
-			{
-				delete[](warped_color_views[ij]);
-				delete[](warped_depth_views[ij]);
-				delete[](DispTargs[ij]);
-			}
-
-			delete[](warped_color_views);
-			delete[](warped_depth_views);
-			delete[](DispTargs);
-		}
-
-
-		double psnr_without_sparse = 0;
-
-		if (SAI->n_references > 0) {
-
-			//aux_write16PGMPPM(SAI->path_out_ppm, SAI->nc, SAI->nr, 3, SAI->color);
-
-			//psnr_result = USE_difftest_ng ? getPSNR(NULL, SAI->path_out_ppm, SAI->path_input_ppm, difftest_call) : 0;
-		
-			psnr_without_sparse = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
-
-			output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", psnr_without_sparse);
-
-		}
-		else {
-			output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", 0.0);
-		}
-
-		unsigned short *colorview_temp = new unsigned short[SAI->nr*SAI->nc * 3]();
-		memcpy(colorview_temp, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
-
-		double psnr_with_sparse = 0;
-
-		if (SAI->NNt > 0 && SAI->Ms > 0)
-		{
-
-			SAI->use_global_sparse = true;
-
-			int startt = clock();
-
-			getGlobalSparseFilter(SAI, original_color_view);
-
-			//std::cout << "time elapsed in getGlobalSparseFilter()\t" << (float)( (int)clock() - startt ) / CLOCKS_PER_SEC << "\n";
-
-			applyGlobalSparseFilter(SAI);
-
-			psnr_with_sparse = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
-
-			//aux_write16PGMPPM(SAI->path_out_ppm, SAI->nc, SAI->nr, 3, SAI->color);
-			//psnr_result = USE_difftest_ng ? getPSNR(NULL, SAI->path_out_ppm, SAI->path_input_ppm, difftest_call) : 0;
-			
-		}
-
-		if (SAI->use_global_sparse) { /* check validity of sparse filter */
-			if ( psnr_with_sparse<psnr_without_sparse ) //<0.1
-			{
-				SAI->use_global_sparse = false;
-				memcpy(SAI->color, colorview_temp, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
 			}
 		}
 
-		if (SAI->use_global_sparse) {
-			output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", psnr_with_sparse);
-		}
-		else {
-			output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", 0.0);
-		}
-
-		delete[](colorview_temp);
 
 		char ppm_residual_path[1024];
 
@@ -484,22 +531,69 @@ int main(int argc, char** argv) {
 		float rate_a1 = 0;
 
 		/* get residual */
-		if (SAI->residual_rate_color > 0)
-		{
+		//if (SAI->residual_rate_color > 0)
+		//{
+
+		int N_rdo = 11;
+
+		float *rdo_r = new float[N_rdo]();
+		for (int qi = 0; qi < N_rdo; qi++) {
+			rdo_r[qi] = -1 + qi*2.0f / static_cast<float>(N_rdo);
+		}
+
+		rdo_r[N_rdo / 2] = 0.0f;
+
+		float residual_rate_nominal = SAI->residual_rate_color;
+
+		unsigned short *pred_color = new unsigned short[SAI->nr*SAI->nc * 3]();
+		memcpy(pred_color, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+
+		const float MIN_JP2_RATE = 0.008f;
+
+		if (residual_rate_nominal < MIN_JP2_RATE) {
+			rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%d", N_rdo+1);
+			double qi_psnr = getYCbCr_422_PSNR(pred_color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
+			rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%2.6f\n%2.6f", residual_rate_nominal, qi_psnr);
+		}
+		else {
+			rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%d", N_rdo);
+		}
+
+		for (int qi = 0; qi < N_rdo; qi++) {
+
+			memcpy(SAI->color, pred_color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+
+			SAI->residual_rate_color = residual_rate_nominal + rdo_r[qi] * SAI->delta_r;
+
+			SAI->residual_rate_color = SAI->residual_rate_color < MIN_JP2_RATE ? MIN_JP2_RATE : SAI->residual_rate_color;
+
+			int q = 999;
+
+			if (qi == ceil(N_rdo / 2)-1) { // nominal
+				q = 0;
+			}
+			if (qi == 0) { // -1.0
+				q = 1;
+			}
+			if (qi == N_rdo-1) { // 1.0
+				q = 2;
+			}
 
 			/* COLOR residual here, lets try YUV */
 
-			sprintf(pgm_residual_Y_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Y_residual.pgm");
-			sprintf(jp2_residual_Y_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Y_residual.jp2");
+			sprintf(SAI->path_out_ppm, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_", q, ".ppm");
 
-			sprintf(pgm_residual_Cb_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Cb_residual.pgm");
-			sprintf(jp2_residual_Cb_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Cb_residual.jp2");
+			sprintf(pgm_residual_Y_path, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_Y_residual_", q, ".pgm");
+			sprintf(jp2_residual_Y_path_jp2, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_Y_residual_", q, ".jp2");
 
-			sprintf(pgm_residual_Cr_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Cr_residual.pgm");
-			sprintf(jp2_residual_Cr_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Cr_residual.jp2");
+			sprintf(pgm_residual_Cb_path, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_Cb_residual_", q, ".pgm");
+			sprintf(jp2_residual_Cb_path_jp2, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_Cb_residual_", q, ".jp2");
 
-			sprintf(ppm_residual_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.ppm");
-			sprintf(jp2_residual_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.jp2");
+			sprintf(pgm_residual_Cr_path, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_Cr_residual_", q, ".pgm");
+			sprintf(jp2_residual_Cr_path_jp2, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_Cr_residual_", q, ".jp2");
+
+			sprintf(ppm_residual_path, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_residual_", q, ".ppm");
+			sprintf(jp2_residual_path_jp2, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_residual_", q, ".jp2");
 
 			ycbcr_pgm_names[0] = pgm_residual_Y_path;
 			ycbcr_pgm_names[1] = pgm_residual_Cb_path;
@@ -508,17 +602,17 @@ int main(int argc, char** argv) {
 			ycbcr_jp2_names[0] = jp2_residual_Y_path_jp2;
 			ycbcr_jp2_names[1] = jp2_residual_Cb_path_jp2;
 			ycbcr_jp2_names[2] = jp2_residual_Cr_path_jp2;
-			
+
 
 			if (YUV_TRANSFORM) {
 
 				int offset_v = 0;
 
 				if (RESIDUAL_16BIT) {
-					offset_v = (1<<15) - 1;
+					offset_v = (1 << 15) - 1;
 				}
 				else {
-					offset_v = (1<<BIT_DEPTH) - 1;
+					offset_v = (1 << BIT_DEPTH) - 1;
 				}
 
 				//float rate_a = 6.5 / 8.0;// 7.2 / 8.0;
@@ -546,7 +640,7 @@ int main(int argc, char** argv) {
 						encodeResidualJP2_YUV(SAI->nr, SAI->nc, original_color_view, tmp_im, ycbcr_pgm_names,
 							kdu_compress_path, ycbcr_jp2_names, SAI->residual_rate_color, ncomp_r, offset_v, rate_a / 8.0f, RESIDUAL_16BIT_bool);
 
-						decodeResidualJP2_YUV(tmp_im, kdu_expand_path, ycbcr_jp2_names, ycbcr_pgm_names, ncomp_r, offset_v, (1<<BIT_DEPTH) - 1, RESIDUAL_16BIT_bool);
+						decodeResidualJP2_YUV(tmp_im, kdu_expand_path, ycbcr_jp2_names, ycbcr_pgm_names, ncomp_r, offset_v, (1 << BIT_DEPTH) - 1, RESIDUAL_16BIT_bool);
 
 						double psnr_result_yuv = getYCbCr_422_PSNR(tmp_im, original_color_view, SAI->nr, SAI->nc, 3, 10);
 
@@ -581,13 +675,13 @@ int main(int argc, char** argv) {
 				encodeResidualJP2_YUV(SAI->nr, SAI->nc, original_color_view, SAI->color, ycbcr_pgm_names,
 					kdu_compress_path, ycbcr_jp2_names, SAI->residual_rate_color, ncomp_r, offset_v, rate_a1 / (float)8.0, RESIDUAL_16BIT_bool);
 
-				decodeResidualJP2_YUV(SAI->color, kdu_expand_path, ycbcr_jp2_names, ycbcr_pgm_names, ncomp_r, offset_v, (1<<BIT_DEPTH) - 1, RESIDUAL_16BIT_bool);
+				decodeResidualJP2_YUV(SAI->color, kdu_expand_path, ycbcr_jp2_names, ycbcr_pgm_names, ncomp_r, offset_v, (1 << BIT_DEPTH) - 1, RESIDUAL_16BIT_bool);
 
 				/* also compete against no yuv transformation */
 
 				double psnr_result_yuv_w_trans = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, 10);
 
-				offset_v = (1<<BIT_DEPTH) - 1;
+				offset_v = (1 << BIT_DEPTH) - 1;
 
 				encodeResidualJP2(SAI->nr, SAI->nc, original_color_view, tmpim, ppm_residual_path,
 					kdu_compress_path, jp2_residual_path_jp2, SAI->residual_rate_color, 3, offset_v, RESIDUAL_16BIT_bool);
@@ -607,7 +701,7 @@ int main(int argc, char** argv) {
 			}
 			else {
 
-				int offset_v = (1<<BIT_DEPTH) - 1;
+				int offset_v = (1 << BIT_DEPTH) - 1;
 
 				encodeResidualJP2(SAI->nr, SAI->nc, original_color_view, SAI->color, ppm_residual_path,
 					kdu_compress_path, jp2_residual_path_jp2, SAI->residual_rate_color, 3, offset_v, RESIDUAL_16BIT_bool);
@@ -616,8 +710,38 @@ int main(int argc, char** argv) {
 
 			}
 
-			SAI->has_color_residual = true;
+			aux_write16PGMPPM(SAI->path_out_ppm, SAI->nc, SAI->nr, 3, SAI->color);
+
+			double qi_psnr = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
+
+			rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%2.6f\n%2.6f", SAI->residual_rate_color, qi_psnr);
+
 		}
+
+		SAI->has_color_residual = true;
+
+		SAI->residual_rate_color = residual_rate_nominal;
+
+		if ( SAI->residual_rate_color == 0 ) {
+
+			SAI->has_color_residual = false;
+
+			sprintf(SAI->path_out_ppm, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_", -1, ".ppm");
+			aux_write16PGMPPM(SAI->path_out_ppm, SAI->nc, SAI->nr, 3, pred_color);
+
+			sprintf(SAI->path_out_ppm, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_", 0, ".ppm");
+			aux_write16PGMPPM(SAI->path_out_ppm, SAI->nc, SAI->nr, 3, pred_color);
+
+			memcpy(SAI->color, pred_color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+
+		}
+
+		delete[](pred_color);
+
+		delete[](SAI->color);
+
+		sprintf(SAI->path_out_ppm, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_", 0, ".ppm");
+		aux_read16PGMPPM(SAI->path_out_ppm, SAI->nc, SAI->nr, ncomp1, SAI->color);
 
 		if (SAI->residual_rate_depth > 0 && depth_file_exist) { /* residual depth if needed */
 
@@ -628,7 +752,7 @@ int main(int argc, char** argv) {
 			encodeResidualJP2(SAI->nr, SAI->nc, original_depth_view, SAI->depth, pgm_residual_depth_path,
 				kdu_compress_path, jp2_residual_depth_path_jp2, SAI->residual_rate_depth, 1, 0, 1);
 
-			decodeResidualJP2(SAI->depth, kdu_expand_path, jp2_residual_depth_path_jp2, pgm_residual_depth_path, ncomp1, 0, (1<<16) - 1, 1);
+			decodeResidualJP2(SAI->depth, kdu_expand_path, jp2_residual_depth_path_jp2, pgm_residual_depth_path, ncomp1, 0, (1 << 16) - 1, 1);
 
 			SAI->has_depth_residual = true;
 		}
@@ -638,18 +762,18 @@ int main(int argc, char** argv) {
 			unsigned short *tmp_depth = new unsigned short[SAI->nr*SAI->nc]();
 			int startt = clock();
 			medfilt2D(SAI->depth, tmp_depth, 3, SAI->nr, SAI->nc);
-			std::cout << "time elapsed in depth median filtering\t" << (float)( (int)clock() - startt )/CLOCKS_PER_SEC << "\n";
+			std::cout << "time elapsed in depth median filtering\t" << (float)((int)clock() - startt) / CLOCKS_PER_SEC << "\n";
 			memcpy(SAI->depth, tmp_depth, sizeof(unsigned short)*SAI->nr*SAI->nc);
 			delete[](tmp_depth);
 		}
 
-		aux_write16PGMPPM(SAI->path_out_ppm, SAI->nc, SAI->nr, 3, SAI->color);
+
 		aux_write16PGMPPM(SAI->path_out_pgm, SAI->nc, SAI->nr, 1, SAI->depth);
 
-		if (SAI->residual_rate_depth > 0 && depth_file_exist) 
+		if (SAI->residual_rate_depth > 0 && depth_file_exist)
 		{
 			//psnr_result = USE_difftest_ng ? getPSNR(NULL, SAI->path_out_pgm, SAI->path_input_pgm, difftest_call_pgm) : 0;
-			output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", PSNR(SAI->depth, original_depth_view, SAI->nr, SAI->nc, 1) );
+			output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", PSNR(SAI->depth, original_depth_view, SAI->nr, SAI->nc, 1));
 		}
 		else {
 			output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", 0.0);
@@ -661,11 +785,13 @@ int main(int argc, char** argv) {
 		double final_psnr = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
 		psnr_yuv_mean += final_psnr;
 
-		output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", final_psnr );
+		//rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%2.6f\n%2.6f", SAI->residual_rate_color, final_psnr);
 
-		output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", rate_a1); 
+		output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", final_psnr);
+
+		output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", rate_a1);
 		output_buffer_length += sprintf(output_results + output_buffer_length, "\t%f", SAI->stdd);
-		
+
 
 		delete[](original_color_view);
 		delete[](original_depth_view);
@@ -680,7 +806,7 @@ int main(int argc, char** argv) {
 		if (!global_header_written) { //these are global
 			n_bytes_prediction += (int)fwrite(&SAI->nr, sizeof(int), 1, output_LF_file) * sizeof(int); // needed only once per LF
 			n_bytes_prediction += (int)fwrite(&SAI->nc, sizeof(int), 1, output_LF_file) * sizeof(int); // 
-			n_bytes_prediction += (int)fwrite(&yuv_transform_s, sizeof(int), 1, output_LF_file) * sizeof(int); 
+			n_bytes_prediction += (int)fwrite(&yuv_transform_s, sizeof(int), 1, output_LF_file) * sizeof(int);
 			n_bytes_prediction += (int)fwrite(&MINIMUM_DEPTH, sizeof(unsigned short), 1, output_LF_file) * sizeof(unsigned short);
 			global_header_written = true;
 		}
@@ -692,7 +818,31 @@ int main(int argc, char** argv) {
 		viewHeaderToCodestream(tmp_pred_bytes, SAI, tmp_codestream, yuv_transform_s);
 		fclose(tmp_codestream);
 
-		if (SAI->residual_rate_color > 0) {
+		if (SAI->has_color_residual) {
+
+			int q = 0;
+
+			sprintf(SAI->path_out_ppm, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_", q, ".ppm");
+
+			sprintf(pgm_residual_Y_path, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_Y_residual_", q, ".pgm");
+			sprintf(jp2_residual_Y_path_jp2, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_Y_residual_", q, ".jp2");
+
+			sprintf(pgm_residual_Cb_path, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_Cb_residual_", q, ".pgm");
+			sprintf(jp2_residual_Cb_path_jp2, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_Cb_residual_", q, ".jp2");
+
+			sprintf(pgm_residual_Cr_path, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_Cr_residual_", q, ".pgm");
+			sprintf(jp2_residual_Cr_path_jp2, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_Cr_residual_", q, ".jp2");
+
+			sprintf(ppm_residual_path, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_residual_", q, ".ppm");
+			sprintf(jp2_residual_path_jp2, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_residual_", q, ".jp2");
+
+			ycbcr_pgm_names[0] = pgm_residual_Y_path;
+			ycbcr_pgm_names[1] = pgm_residual_Cb_path;
+			ycbcr_pgm_names[2] = pgm_residual_Cr_path;
+
+			ycbcr_jp2_names[0] = jp2_residual_Y_path_jp2;
+			ycbcr_jp2_names[1] = jp2_residual_Cb_path_jp2;
+			ycbcr_jp2_names[2] = jp2_residual_Cr_path_jp2;
 
 			if (SAI->yuv_transform && YUV_TRANSFORM) {
 
@@ -718,7 +868,7 @@ int main(int argc, char** argv) {
 
 		fclose(output_LF_file);
 
-		printf("encoded: %i kilobytes\t\tPSNR YUV (%03d_%03d): %2.3f\tPSNR YUV mean: %2.3f\n", aux_GetFileSize(path_out_LF_data) / 1000, SAI->r,SAI->c, final_psnr, psnr_yuv_mean/(ii+1));
+		printf("encoded: %i kilobytes\t\tPSNR YUV (%03d_%03d): %2.3f\tPSNR YUV mean: %2.3f\n", aux_GetFileSize(path_out_LF_data) / 1000, SAI->r, SAI->c, final_psnr, psnr_yuv_mean / (ii + 1));
 
 		output_buffer_length += sprintf(output_results + output_buffer_length, "\t%i", n_bytes_prediction);
 		output_buffer_length += sprintf(output_results + output_buffer_length, "\t%i", n_bytes_residual);
@@ -726,6 +876,10 @@ int main(int argc, char** argv) {
 		output_results_file = fopen(output_results_filename, "a");
 		fprintf(output_results_file, "%s\n", output_results);
 		fclose(output_results_file);
+
+		rdo_statistics_file = fopen(path_out_RDO_statistics, "a");
+		fprintf(rdo_statistics_file, "%s\n", rdo_buffer_this_view);
+		fclose(rdo_statistics_file);
 
 		/* to reduce memory usage */
 		if (SAI->color != NULL) {

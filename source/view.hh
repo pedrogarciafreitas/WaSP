@@ -2,6 +2,7 @@
 #define VIEW_HH
 
 #include <stdint.h>
+#include <vector>
 
 #define MEDFILT_DEPTH false
 
@@ -75,6 +76,10 @@ struct view{
 	bool has_x_displacement, has_y_displacement;
 
 	bool has_chrominance;
+
+	float delta_r;
+	//int n_rdo_dense;
+	std::vector<float> rdo_dense_rates;
 
 };
 

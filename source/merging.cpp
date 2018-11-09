@@ -163,10 +163,10 @@ void getViewMergingLSWeights_N(view *view0, unsigned short **warpedColorViews, f
 
 		int Mtrue = FastOLS_new(&AA, &Yd, PredRegr0, PredTheta0, M, M, M, N);
 
-		if (AA != NULL) {
+		if (AA != nullptr) {
 			delete[](AA);
 		}
-		if (Yd != NULL) {
+		if (Yd != nullptr) {
 			delete[](Yd);
 		}
 
@@ -262,7 +262,7 @@ void initViewW(view *view0, float **DispTargs) {
 
 	(view0)->NB = (1 << view0->n_references)*view0->n_references; // (pow(2, (view0)->n_references)*(view0)->n_references);
 	
-	if ((view0)->merge_weights == NULL) {
+	if ((view0)->merge_weights == nullptr) {
 		signed short *merge_weights = new signed short[(view0)->NB / 2]();
 		(view0)->merge_weights = merge_weights;
 	}

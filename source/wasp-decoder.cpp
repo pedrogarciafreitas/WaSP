@@ -121,8 +121,8 @@ int main(int argc, char** argv) {
 				delete[](ref_view->depth);
 				delete[](ref_view->color);
 
-				ref_view->depth = NULL;
-				ref_view->color = NULL;
+				ref_view->depth = nullptr;
+				ref_view->color = nullptr;
 
 				char tmp_str[1024];
 
@@ -294,19 +294,19 @@ int main(int argc, char** argv) {
 		aux_write16PGMPPM(SAI->path_out_ppm, SAI->nc, SAI->nr, 3, SAI->color);
 		aux_write16PGMPPM(SAI->path_out_pgm, SAI->nc, SAI->nr, 1, SAI->depth);
 
-		if (SAI->color != NULL) {
+		if (SAI->color != nullptr) {
 			delete[](SAI->color);
-			SAI->color = NULL;
+			SAI->color = nullptr;
 		}
 
-		if (SAI->depth != NULL) {
+		if (SAI->depth != nullptr) {
 			delete[](SAI->depth);
-			SAI->depth = NULL;
+			SAI->depth = nullptr;
 		}
 		
-		if (SAI->seg_vp != NULL) {
+		if (SAI->seg_vp != nullptr) {
 			delete[](SAI->seg_vp);
-			SAI->seg_vp = NULL;
+			SAI->seg_vp = nullptr;
 		}
 
 		printf("decoded: %i kilobytes\n", ftell(input_LF) / 1000);
@@ -321,23 +321,23 @@ int main(int argc, char** argv) {
 
 		view *SAI = LF + ii;
 
-		if (SAI->color != NULL)
+		if (SAI->color != nullptr)
 			delete[](SAI->color);
-		if (SAI->depth != NULL)
+		if (SAI->depth != nullptr)
 			delete[](SAI->depth);
-		if (SAI->references != NULL)
+		if (SAI->references != nullptr)
 			delete[](SAI->references);
-		if (SAI->depth_references != NULL)
+		if (SAI->depth_references != nullptr)
 			delete[](SAI->depth_references);
-		if (SAI->merge_weights != NULL)
+		if (SAI->merge_weights != nullptr)
 			delete[](SAI->merge_weights);
-		if (SAI->sparse_weights != NULL)
+		if (SAI->sparse_weights != nullptr)
 			delete[](SAI->sparse_weights);
-		if (SAI->bmask != NULL)
+		if (SAI->bmask != nullptr)
 			delete[](SAI->bmask);
-		if (SAI->seg_vp != NULL)
+		if (SAI->seg_vp != nullptr)
 			delete[](SAI->seg_vp);
-		if (SAI->sparse_mask != NULL)
+		if (SAI->sparse_mask != nullptr)
 			delete[](SAI->sparse_mask);
 
 	}

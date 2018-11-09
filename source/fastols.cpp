@@ -1,6 +1,6 @@
 #include "fastols.hh"
 
-#define NULL 0
+#define nullptr 0
 
 int FastOLS_new(double **AAA, double **Ydd, int *PredRegr0, double *PredTheta0, const int Ms, const int MT, const int MPHI, const int N)
 {
@@ -74,7 +74,7 @@ int FastOLS_new(double **AAA, double **Ydd, int *PredRegr0, double *PredTheta0, 
 	}
 
 	delete[](*AAA);
-	*AAA = NULL;
+	*AAA = nullptr;
 
 	/* YdTYd */
 	double yd2 = 0;
@@ -83,7 +83,7 @@ int FastOLS_new(double **AAA, double **Ydd, int *PredRegr0, double *PredTheta0, 
 		yd2 += (*(Yd + ii))*(*(Yd + ii));
 
 	delete[](*Ydd);
-	*Ydd = NULL;
+	*Ydd = nullptr;
 
 
 	// Usage example: Ms= 3 says the sparsity (length of final predictor) and MT =42 tells how many regressors are available
@@ -356,7 +356,7 @@ int FastOLS_new(double *AA, double *Yd, int *PredRegr0, double *PredTheta0, cons
 //	}
 //
 //	delete[](AA);
-//	AA = NULL;
+//	AA = nullptr;
 
 	/* YdTYd */
 	double yd2 = 0;
@@ -365,7 +365,7 @@ int FastOLS_new(double *AA, double *Yd, int *PredRegr0, double *PredTheta0, cons
 		yd2 += (*(Yd + ii))*(*(Yd + ii));
 
 	delete[](Yd);
-	Yd = NULL;
+	Yd = nullptr;
 
 
 	// Usage example: Ms= 3 says the sparsity (length of final predictor) and MT =42 tells how many regressors are available

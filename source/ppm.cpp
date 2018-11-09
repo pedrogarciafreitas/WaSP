@@ -14,13 +14,13 @@ bool aux_read16PGMPPM(const char* filename, int &width, int &height, int &ncomp,
 	int red, green, blue;
 	char dummy[100];
 
-	unsigned short *Image16bit = NULL;
+	unsigned short *Image16bit = nullptr;
 
 	FILE *filept;
 
 	filept = fopen(filename, "rb");
 
-	if (filept == NULL) {
+	if (filept == nullptr) {
 		printf("%s does not exist\n", filename);
 		return false;
 	}
@@ -109,7 +109,7 @@ bool aux_write16PGMPPM(const char* filename, const int width, const int height, 
 
 	filept = fopen(filename, "wb");
 
-	if (filept == NULL) {
+	if (filept == nullptr) {
 		printf("Cannot open %s\n", filename);
 		return false;
 	}

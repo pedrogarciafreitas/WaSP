@@ -4,7 +4,7 @@
 
 #include <iostream>
 
-void viewHeaderToCodestream(int &n_bytes_prediction, view *SAI, FILE *output_LF_file, const int yuv_transform_s) {
+void viewHeaderToCodestream(int &n_bytes_prediction, view *SAI, FILE *output_LF_file) {
 
 	minimal_config mconf = makeMinimalConfig(SAI);
 

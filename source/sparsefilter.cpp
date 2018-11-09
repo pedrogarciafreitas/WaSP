@@ -7,7 +7,7 @@
 #include <vector>
 #include <algorithm>
 
-#define NULL 0
+#define nullptr 0
 
 void applyGlobalSparseFilter(view *view0){
 
@@ -166,10 +166,10 @@ void getGlobalSparseFilter(view *view0, unsigned short *original_color_view)
 	int Mtrue = FastOLS_new(&AA, &Yd, PredRegr0, PredTheta0, Ms, MT, (NNt * 2 + 1)*(NNt * 2 + 1) + 1, Npp);
 	//int Mtrue = FastOLS_new(AA, Yd, PredRegr0, PredTheta0, Ms, MT, (NNt * 2 + 1)*(NNt * 2 + 1) + 1, Npp,PHI,PSI);
 
-	if (AA != NULL) {
+	if (AA != nullptr) {
 		delete[](AA);
 	}
-	if (Yd != NULL) {
+	if (Yd != nullptr) {
 		delete[](Yd);
 	}
 

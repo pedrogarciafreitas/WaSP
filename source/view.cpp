@@ -1,13 +1,13 @@
 #include "view.hh"
 
-#define NULL 0
+#define nullptr 0
 
 void initView(view* view)
 {
 
-	view->color = NULL;
-	view->depth = NULL;
-	view->segmentation = NULL;
+	view->color = nullptr;
+	view->depth = nullptr;
+	view->segmentation = nullptr;
 
 	view->r = 0;
 	view->c = 0;
@@ -15,17 +15,17 @@ void initView(view* view)
 	view->min_inv_d = 0;
 	view->n_references = 0;
 
-	view->references = NULL;
-	view->depth_references = NULL;
+	view->references = nullptr;
+	view->depth_references = nullptr;
 
-	view->merge_weights = NULL;
-	view->sparse_weights = NULL;
-	view->sparse_mask = NULL;
-	view->merge_weights_float = NULL;
-	view->number_of_pixels_per_region = NULL;
+	view->merge_weights = nullptr;
+	view->sparse_weights = nullptr;
+	view->sparse_mask = nullptr;
+	view->merge_weights_float = nullptr;
+	view->number_of_pixels_per_region = nullptr;
 
-	view->bmask = NULL;
-	view->seg_vp = NULL;
+	view->bmask = nullptr;
+	view->seg_vp = nullptr;
 
 	view->NNt = 0;
 	view->Ms = 0;
@@ -33,8 +33,8 @@ void initView(view* view)
 	view->has_segmentation = 0;
 	view->maxL = 0;
 
-	view->DM_ROW = NULL;
-	view->DM_COL = NULL;
+	view->DM_ROW = nullptr;
+	view->DM_COL = nullptr;
 
 	view->i_order = 0;
 
@@ -56,5 +56,12 @@ void initView(view* view)
 	view->has_y_displacement = false;
 
 	view->has_chrominance = false;
+
+	view->depth_file_exist = false;
+
+	view->final_psnr = 0.0;
+	view->warp_psnr = 0.0;
+	view->merge_psnr = 0.0;
+	view->sparse_psnr = 0.0;
 
 }

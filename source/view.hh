@@ -76,6 +76,29 @@ struct view{
 
 	bool has_chrominance;
 
+	bool depth_file_exist;
+
+	char ppm_residual_path[1024];
+	char jp2_residual_path_jp2[1024];
+
+	char pgm_residual_Y_path[1024];
+	char jp2_residual_Y_path_jp2[1024];
+	char pgm_residual_Cb_path[1024];
+	char jp2_residual_Cb_path_jp2[1024];
+	char pgm_residual_Cr_path[1024];
+	char jp2_residual_Cr_path_jp2[1024];
+
+	char *ycbcr_pgm_names[3];
+	char *ycbcr_jp2_names[3];
+
+	char pgm_residual_depth_path[1024];
+	char jp2_residual_depth_path_jp2[1024];
+
+	double final_psnr;
+	double warp_psnr;
+	double merge_psnr;
+	double sparse_psnr;
+
 };
 
 void initView(view* view);

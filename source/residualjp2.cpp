@@ -234,7 +234,7 @@ void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char
 		}
 	}
 
-	unsigned short *ycbcr = NULL;
+	unsigned short *ycbcr = nullptr;
 
 	unsigned short *jp2_residual;
 
@@ -243,7 +243,7 @@ void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char
 	for (int icomp = 0; icomp < ncomp; icomp++) {
 		if (aux_read16PGMPPM(ycbcr_pgm_names[icomp], nc1, nr1, ncomp1, jp2_residual))
 		{
-			if (ycbcr == NULL) {
+			if (ycbcr == nullptr) {
 				ycbcr = new unsigned short[nc1*nr1*3]();
 			}
 

@@ -8,7 +8,7 @@
 float getPSNR(FILE *fileout, const char *path_out_ppm, const char *path_input_ppm, const char *difftest_call)
 {
 
-	if (fileout == NULL)
+	if (fileout == nullptr)
 		fileout = stdout;
 
 	/* run psnr here */

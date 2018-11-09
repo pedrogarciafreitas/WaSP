@@ -31,8 +31,8 @@ void predictDepth(view* SAI, view *LF)
 			delete[](ref_view->depth);
 			delete[](ref_view->color);
 
-			ref_view->depth = NULL;
-			ref_view->color = NULL;
+			ref_view->depth = nullptr;
+			ref_view->color = nullptr;
 		}
 
 		/* merge depth using median*/

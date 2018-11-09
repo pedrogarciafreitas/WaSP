@@ -13,6 +13,7 @@
 
 #define CLEVELS 6
 #define USE_JP2_DICTIONARY 1
+#define QSTEP_FLOAT 0.0039f
 
 void getJP2Header(unsigned char *JP2, unsigned char *&header, int JP2Size, int &headerSize) {
 
@@ -277,7 +278,7 @@ void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char
 	signed int maxval = (1 << BP) - 1;// pow(2, BP) - 1;
 
 	for (int ii = 0; ii < nr1*nc1*ncomp; ii++) {
-		*(ycbcr + ii) = clip(*(ycbcr + ii), (unsigned short)0, (unsigned short)maxval);
+		*(ycbcr + ii) = clip(*(ycbcr + ii), static_cast<unsigned short>(0), static_cast<unsigned short>( maxval ));
 	}
 
 	unsigned short *rgb = new unsigned short[nr1*nc1*3]();
@@ -318,7 +319,7 @@ void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_
 	for (int iir = 0; iir < nr*nc*3; iir++) {
 		signed int res_val = ( (((signed int)*(original_intermediate_view + iir)) - ((signed int)*(ps + iir)) + offset) )/dv;
 		res_val = clip(res_val, 0, maxval);
-		*(residual_image + iir) = (unsigned short)(res_val);
+		*(residual_image + iir) = static_cast<unsigned short>(res_val);
 	}
 
 	unsigned short *ycbcr = new unsigned short[nr*nc*3]();

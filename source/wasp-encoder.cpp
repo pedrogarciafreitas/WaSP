@@ -534,42 +534,66 @@ int main(int argc, char** argv) {
 		//if (SAI->residual_rate_color > 0)
 		//{
 
+		float residual_rate_nominal = SAI->residual_rate_color;
+
+		const float MIN_JP2_RATE = 0.008f;
+
 		int N_rdo = 11;
 
-		float *rdo_r = new float[N_rdo]();
-		for (int qi = 0; qi < N_rdo; qi++) {
-			rdo_r[qi] = -1 + qi*2.0f / static_cast<float>(N_rdo);
+		float start_f = -1.0f;
+
+		if (residual_rate_nominal < MIN_JP2_RATE) {
+			start_f = 0.0f;
 		}
 
-		rdo_r[N_rdo / 2] = 0.0f;
+		float *rdo_r = new float[N_rdo]();
 
-		float residual_rate_nominal = SAI->residual_rate_color;
+		int min_ind = 0;
+		float maxvali_q = 1000.0f;
+
+		for (int qi = 0; qi < N_rdo; qi++) {
+			rdo_r[qi] = start_f + qi*(3.0f-start_f) / static_cast<float>(N_rdo);
+
+			if ( abs( rdo_r[qi] ) < maxvali_q) {
+				maxvali_q = abs(rdo_r[qi]);
+				min_ind = qi;
+			}
+
+		}
+
+		rdo_r[min_ind] = 0.0f;
+
+		//rdo_r[N_rdo / 2] = 0.0f; // for nominal to be included in the experimental curve
 
 		unsigned short *pred_color = new unsigned short[SAI->nr*SAI->nc * 3]();
 		memcpy(pred_color, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
 
-		const float MIN_JP2_RATE = 0.008f;
+		rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%d", min_ind);
+		rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%d", N_rdo + 1);
+		double qi_psnr = getYCbCr_422_PSNR(pred_color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
+		rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%2.6f\n%2.6f", 0.0f, qi_psnr);
 
 		if (residual_rate_nominal < MIN_JP2_RATE) {
-			rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%d", N_rdo+1);
-			double qi_psnr = getYCbCr_422_PSNR(pred_color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
-			rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%2.6f\n%2.6f", residual_rate_nominal, qi_psnr);
-		}
-		else {
-			rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%d", N_rdo);
+			sprintf(SAI->path_out_ppm, "%s%c%03d_%03d%s%d%s", output_dir, '/', SAI->c, SAI->r, "_", 0, ".ppm");
+			aux_write16PGMPPM(SAI->path_out_ppm, SAI->nc, SAI->nr, 3, SAI->color);
+		//}
+		//else {
+		//	rdo_buffer_this_view_length += sprintf(rdo_buffer_this_view + rdo_buffer_this_view_length, "\n%d", N_rdo);
 		}
 
 		for (int qi = 0; qi < N_rdo; qi++) {
 
 			memcpy(SAI->color, pred_color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
 
-			SAI->residual_rate_color = residual_rate_nominal + rdo_r[qi] * SAI->delta_r;
+			SAI->residual_rate_color = residual_rate_nominal; // init with original
 
 			SAI->residual_rate_color = SAI->residual_rate_color < MIN_JP2_RATE ? MIN_JP2_RATE : SAI->residual_rate_color;
 
+			SAI->residual_rate_color = SAI->residual_rate_color + rdo_r[qi] * SAI->delta_r;
+
 			int q = 999;
 
-			if (qi == ceil(N_rdo / 2)-1) { // nominal
+			if ( (qi == min_ind) && (residual_rate_nominal>MIN_JP2_RATE) ) { // nominal
 				q = 0;
 			}
 			if (qi == 0) { // -1.0
@@ -608,12 +632,12 @@ int main(int argc, char** argv) {
 
 				int offset_v = 0;
 
-				if (RESIDUAL_16BIT) {
-					offset_v = (1 << 15) - 1;
-				}
-				else {
-					offset_v = (1 << BIT_DEPTH) - 1;
-				}
+				//if (RESIDUAL_16BIT) {
+				//	offset_v = (1 << 15) - 1;
+				//}
+				//else {
+				offset_v = (1 << BIT_DEPTH) - 1;
+				//}
 
 				//float rate_a = 6.5 / 8.0;// 7.2 / 8.0;
 

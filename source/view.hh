@@ -55,10 +55,7 @@ struct view{
 
 	char path_input_pgm[1024], path_input_ppm[1024], path_input_seg[1024];
 	char path_out_pgm[1024], path_out_ppm[1024];
-
-	//char path_input_Y_pgm[1024], path_out_Y_pgm[1024];
-	//char path_input_Cb_pgm[1024], path_out_Cb_pgm[1024];
-	//char path_input_Cr_pgm[1024], path_out_Cr_pgm[1024];
+	char path_label_im[1024];
 
 	float *DM_ROW, *DM_COL; /* for lenslet with region displacement vectors */
 
@@ -99,9 +96,30 @@ struct view{
 	double merge_psnr;
 	double sparse_psnr;
 
+	int ncomp;
+
+	/* for regions */
+	int32_t *label_im;
+	int nregions;
+	int *reg_histogram;
+
+	char output_dir[1024];
+	char input_dir[1024];
+
+
 };
 
 void initView(view* view);
 
+bool loadColor(view* SAI);
+bool loadInverseDepth(view* SAI);
+void unloadColor(view* SAI);
+void unloadInverseDepth(view* SAI);
+
+bool loadLabels(view* SAI);
+void unloadLabels(view *SAI);
+
+int32_t *loadWarpedLabelIm(view *SAI, view *ref_view);
+bool writeWarpedLabelIm(view *SAI, view *ref_view, const int32_t *warpedLabelIm);
 
 #endif

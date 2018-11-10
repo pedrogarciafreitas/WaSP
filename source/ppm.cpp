@@ -147,10 +147,10 @@ bool aux_write16PGMPPM(const char* filename, const int width, const int height, 
 		}
 	}
 
-	if (maxi > 1023)
-		maxi = 65535;
-	else
-		maxi = 1023;
+	//if (maxi > 1023)
+	//	maxi = 65535;
+	//else
+	//	maxi = 1023;
 
 	if (ncomp == 3) {
 		fprintf(filept, "P6\n%d %d\n%d\n", width, height, maxi);

@@ -21,7 +21,8 @@
 #include "inpainting.hh"
 #include "predictdepth.hh"
 #include "codestream.hh"
-
+#include "kmeans.hh"
+#include "connected_components.hh"
 
 #define USE_difftest_ng false
 
@@ -106,12 +107,12 @@ int main(int argc, char** argv) {
 
 		if ( abs(xx) > 0) {
 			SAI->has_x_displacement = true;
-			SAI->x = float(xx) / 100000;
+			SAI->x = static_cast<float>(xx) / 100000;
 		}
 
 		if ( abs(yy) > 0) {
 			SAI->has_y_displacement = true;
-			SAI->y = float(yy) / 100000;
+			SAI->y = -static_cast<float>(yy) / 100000;
 		}
 
 		int rate_color, rate_depth;
@@ -172,13 +173,20 @@ int main(int argc, char** argv) {
 
 		fread(&SAI->has_segmentation, sizeof(int), 1, filept); // new,13.06.18 /*reading*/
 
-		sprintf(SAI->path_input_ppm, "%s%c%03d_%03d%s", input_dir, '/', SAI->c, SAI->r, ".ppm");
-		sprintf(SAI->path_input_pgm, "%s%c%03d_%03d%s", input_dir, '/', SAI->c, SAI->r, ".pgm");
+		sprintf(SAI->output_dir, "%s", output_dir);
+		sprintf(SAI->input_dir, "%s", input_dir);
 
-		sprintf(SAI->path_input_seg, "%s%c%03d_%03d%s", input_dir, '/', SAI->c, SAI->r, "_segmentation.pgm");
+		sprintf(SAI->path_input_ppm, "%s%c%03d_%03d%s", SAI->input_dir, '/', SAI->c, SAI->r, ".ppm");
+		sprintf(SAI->path_input_pgm, "%s%c%03d_%03d%s", SAI->input_dir, '/', SAI->c, SAI->r, ".pgm");
 
-		sprintf(SAI->path_out_ppm, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, ".ppm");
-		sprintf(SAI->path_out_pgm, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, ".pgm");
+		sprintf(SAI->path_input_seg, "%s%c%03d_%03d%s", SAI->input_dir, '/', SAI->c, SAI->r, "_segmentation.pgm");
+
+		sprintf(SAI->path_out_ppm, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, ".ppm");
+		sprintf(SAI->path_out_pgm, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, ".pgm");
+
+		sprintf(SAI->path_label_im, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_im_labels.int32");
+
+		
 
 	}
 	fclose(filept);
@@ -218,9 +226,9 @@ int main(int argc, char** argv) {
 
 		if (SAI->residual_rate_depth > 0 && SAI->depth_file_exist) { /* residual depth if needed */
 
-			sprintf(SAI->pgm_residual_depth_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.pgm");
+			sprintf(SAI->pgm_residual_depth_path, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_depth_residual.pgm");
 
-			sprintf(SAI->jp2_residual_depth_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.jp2");
+			sprintf(SAI->jp2_residual_depth_path_jp2, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_depth_residual.jp2");
 
 			encodeResidualJP2(SAI->nr, SAI->nc, original_depth_view, SAI->depth, SAI->pgm_residual_depth_path,
 				kdu_compress_path, SAI->jp2_residual_depth_path_jp2, SAI->residual_rate_depth, 1, 0, 1);
@@ -244,10 +252,124 @@ int main(int argc, char** argv) {
 
 		delete[](original_depth_view);
 
-		if (SAI->depth != nullptr) {
-			delete[](SAI->depth);
-			SAI->depth = nullptr;
+		unloadInverseDepth(SAI);
+
+	}
+
+
+	/* get segmentation from inverse depth for all views*/
+	for (int ii = 0; ii < n_views_total; ii++) {
+
+		view *SAI = LF + ii;
+
+		loadInverseDepth(SAI);
+
+		printf("Obtaining segmentation based on inverse depth at view %03d_%03d\n", SAI->c, SAI->r);
+
+		int *tmp_d = new int[SAI->nr*SAI->nc]();
+		for (int iii = 0; iii < SAI->nr*SAI->nc; iii++) {
+			*(tmp_d + iii) = static_cast<int>(*(SAI->depth + iii));
 		}
+
+		getKmeansQuantized(K_MEANS_CLUSTERS, tmp_d, SAI->nr*SAI->nc, K_MEANS_ITERATIONS); /*inplace assignment to tmp_d*/																				  
+
+		int nregions = 0;
+		int *reg_histogram = 0;
+		int32_t *label_im = get_labels(tmp_d, SAI->nr, SAI->nc, nregions, reg_histogram);
+
+		SAI->label_im = label_im;
+		SAI->nregions = nregions;
+		SAI->reg_histogram = reg_histogram;
+
+		unsigned short *labels = new unsigned short[SAI->nr*SAI->nc]();
+		for (int ii = 0; ii < SAI->nr*SAI->nc; ii++) {
+			*(labels + ii) = static_cast<unsigned short>(  *(label_im + ii) );
+		}
+
+		char labels_file[1024];
+		sprintf(labels_file, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_labels.pgm");
+		aux_write16PGMPPM(labels_file, SAI->nc, SAI->nr, 1, labels);
+
+		char tmp_d_file[1024];
+		sprintf(tmp_d_file, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_kmeans_disparity.int32");
+		FILE *tmpfile_d;
+		tmpfile_d = fopen(tmp_d_file, "wb");
+		fwrite(tmp_d, sizeof(int), SAI->nr*SAI->nc, tmpfile_d);
+		fclose(tmpfile_d);
+
+		delete[](tmp_d);
+		
+		FILE *tmpfile_im_labels;
+		tmpfile_im_labels = fopen(SAI->path_label_im, "wb");
+		fwrite(SAI->label_im, sizeof(int), SAI->nr*SAI->nc, tmpfile_im_labels);
+		fclose(tmpfile_im_labels);
+
+		unloadLabels(SAI);
+		unloadInverseDepth(SAI);
+
+	}
+
+	/* warp labeling for all views with parents */
+	for (int ii = 0; ii < n_views_total; ii++) {
+
+		view *SAI = LF + ii;
+
+		if (SAI->n_references > 0) {
+
+			printf("Warping segmentation to parents (reference views) at view %03d_%03d\t", SAI->c, SAI->r);
+
+			for (int ij = 0; ij < SAI->n_references; ij++) {
+
+				printf("%d ", ij);
+
+				view *ref_view = LF + SAI->references[ij];
+
+				float y0 = ref_view->y;
+				float x0 = ref_view->x;
+
+				float y1 = SAI->y;
+				float x1 = SAI->x;
+
+				loadInverseDepth(ref_view);
+
+				float *inverse_depth_view0 = new float[SAI->nr*SAI->nc]();
+				for (int ijk = 0; ijk < SAI->nr*SAI->nc; ijk++) {
+					*(inverse_depth_view0 + ijk) = static_cast<float>(ref_view->depth[ijk]);
+					*(inverse_depth_view0 + ijk) = *(inverse_depth_view0 + ijk) - static_cast<float>(SAI->min_inv_d);
+					*(inverse_depth_view0 + ijk) = *(inverse_depth_view0 + ijk) / static_cast<float>(1 << D_DEPTH);
+				}
+
+				unloadInverseDepth(ref_view);
+
+				float *DM_COL = new float[SAI->nr*SAI->nc]();
+				float *DM_ROW = new float[SAI->nr*SAI->nc]();
+
+				getDisparity(y0, y1, x0, x1, inverse_depth_view0, ref_view->nr, ref_view->nc, DM_COL, DM_ROW);
+
+				loadLabels(SAI);
+
+				int32_t *warpedLabels = new int32_t[SAI->nr*SAI->nc]();
+				float *warped_inverse_depth = new float[SAI->nr*SAI->nc]();
+
+				warp_0_to_1(DM_ROW, DM_COL, SAI->label_im, SAI->nr, SAI->nc, 1, warpedLabels, warped_inverse_depth, inverse_depth_view0);
+
+				writeWarpedLabelIm(SAI, ref_view, warpedLabels);
+
+				delete[](warped_inverse_depth);
+				delete[](warpedLabels);
+				delete[](inverse_depth_view0);
+
+				delete[](DM_COL);
+				delete[](DM_ROW);
+
+				
+
+			}
+
+			printf("\n");
+
+		}
+
 	}
 
 	/* predict and get residual for COLOR at all views */
@@ -278,34 +400,29 @@ int main(int argc, char** argv) {
 
 				view *ref_view = LF + SAI->references[ij];
 
-				int tmp_w, tmp_r, tmp_ncomp;
-
-				aux_read16PGMPPM(ref_view->path_out_pgm, tmp_w, tmp_r, tmp_ncomp, ref_view->depth);
-				aux_read16PGMPPM(ref_view->path_out_ppm, tmp_w, tmp_r, tmp_ncomp, ref_view->color);
+				loadColor(ref_view);
+				loadInverseDepth(ref_view);
 
 				/* FORWARD warp color AND depth */
 				warpView0_to_View1(ref_view, SAI, warped_color_views[ij], warped_depth_views[ij], DispTargs[ij]);
 
-				delete[](ref_view->depth);
-				delete[](ref_view->color);
-
-				ref_view->depth = nullptr;
-				ref_view->color = nullptr;
-
-				char tmp_str[1024];
+				unloadColor(ref_view);
+				unloadInverseDepth(ref_view);
 
 				if (SAVE_PARTIAL_WARPED_VIEWS) {
 
-					sprintf(tmp_str, "%s/%03d_%03d%s%03d_%03d%s", output_dir, (ref_view)->c, (ref_view)->r, "_warped_to_", SAI->c, SAI->r, ".ppm");
+					char tmp_str[1024];
+
+					sprintf(tmp_str, "%s/%03d_%03d%s%03d_%03d%s", SAI->output_dir, (ref_view)->c, (ref_view)->r, "_warped_to_", SAI->c, SAI->r, ".ppm");
 					aux_write16PGMPPM(tmp_str, SAI->nc, SAI->nr, 3, warped_color_views[ij]);
 
-					sprintf(tmp_str, "%s/%03d_%03d%s%03d_%03d%s", output_dir, (ref_view)->c, (ref_view)->r, "_warped_to_", SAI->c, SAI->r, ".pgm");
+					sprintf(tmp_str, "%s/%03d_%03d%s%03d_%03d%s", SAI->output_dir, (ref_view)->c, (ref_view)->r, "_warped_to_", SAI->c, SAI->r, ".pgm");
 					aux_write16PGMPPM(tmp_str, SAI->nc, SAI->nr, 1, warped_depth_views[ij]);
 
 				}
 
 				//FILE *tmpf;
-				//sprintf(tmp_str, "%s%03d_%03d%s%03d_%03d%s", output_dir, (ref_view)->c, (ref_view)->r, "_warped_to_", SAI->c, SAI->r, "_DispTarg.float");
+				//sprintf(tmp_str, "%s%03d_%03d%s%03d_%03d%s", SAI->output_dir, (ref_view)->c, (ref_view)->r, "_warped_to_", SAI->c, SAI->r, "_DispTarg.float");
 				//tmpf = fopen(tmp_str, "wb");
 				//fwrite(DispTargs[ij], sizeof(float), SAI->nr * SAI->nc, tmpf);
 				//fclose(tmpf);
@@ -435,17 +552,17 @@ int main(int argc, char** argv) {
 
 			/* COLOR residual here, lets try YUV */
 
-			sprintf(SAI->pgm_residual_Y_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Y_residual.pgm");
-			sprintf(SAI->jp2_residual_Y_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Y_residual.jp2");
+			sprintf(SAI->pgm_residual_Y_path, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_Y_residual.pgm");
+			sprintf(SAI->jp2_residual_Y_path_jp2, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_Y_residual.jp2");
 
-			sprintf(SAI->pgm_residual_Cb_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Cb_residual.pgm");
-			sprintf(SAI->jp2_residual_Cb_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Cb_residual.jp2");
+			sprintf(SAI->pgm_residual_Cb_path, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_Cb_residual.pgm");
+			sprintf(SAI->jp2_residual_Cb_path_jp2, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_Cb_residual.jp2");
 
-			sprintf(SAI->pgm_residual_Cr_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Cr_residual.pgm");
-			sprintf(SAI->jp2_residual_Cr_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_Cr_residual.jp2");
+			sprintf(SAI->pgm_residual_Cr_path, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_Cr_residual.pgm");
+			sprintf(SAI->jp2_residual_Cr_path_jp2, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_Cr_residual.jp2");
 
-			sprintf(SAI->ppm_residual_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.ppm");
-			sprintf(SAI->jp2_residual_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.jp2");
+			sprintf(SAI->ppm_residual_path, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_residual.ppm");
+			sprintf(SAI->jp2_residual_path_jp2, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_residual.jp2");
 
 			SAI->ycbcr_pgm_names[0] = SAI->pgm_residual_Y_path;
 			SAI->ycbcr_pgm_names[1] = SAI->pgm_residual_Cb_path;
@@ -572,10 +689,8 @@ int main(int argc, char** argv) {
 		delete[](original_color_view);
 		
 		/* to reduce memory usage */
-		if (SAI->color != nullptr) {
-			delete[](SAI->color);
-			SAI->color = nullptr;
-		}
+
+		unloadColor(SAI);
 
 		if (SAI->seg_vp != nullptr) {
 			delete[](SAI->seg_vp);

@@ -66,6 +66,12 @@
     <ClInclude Include="..\..\source\codestream.hh">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\source\connected_components.hh">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\source\kmeans.hh">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\..\source\predictdepth.cpp">
@@ -111,6 +117,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\source\codestream.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\kmeans.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\source\connected_components.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

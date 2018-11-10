@@ -106,8 +106,13 @@ struct view{
 	char output_dir[1024];
 	char input_dir[1024];
 
+	bool yuv_ratio_search;
+
+	unsigned short *original_color_view;
 
 };
+
+
 
 void initView(view* view);
 
@@ -116,10 +121,15 @@ bool loadInverseDepth(view* SAI);
 void unloadColor(view* SAI);
 void unloadInverseDepth(view* SAI);
 
+bool loadOriginalColor(view* SAI);
+void unloadOriginalColor(view *SAI);
+
 bool loadLabels(view* SAI);
 void unloadLabels(view *SAI);
 
 int32_t *loadWarpedLabelIm(view *SAI, view *ref_view);
 bool writeWarpedLabelIm(view *SAI, view *ref_view, const int32_t *warpedLabelIm);
+
+void cleanView(view *SAI);
 
 #endif

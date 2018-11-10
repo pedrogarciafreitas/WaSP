@@ -3,6 +3,9 @@
 
 #include <cstdio>
 #include <vector>
+#include "view.hh"
+
+void get_and_write_color_residual_JP2(view *SAI, const char *kdu_compress_path, const char *kdu_expand_path);
 
 void getJP2Header(unsigned char *JP2, unsigned char *&header, int JP2Size, int &headerSize);
 

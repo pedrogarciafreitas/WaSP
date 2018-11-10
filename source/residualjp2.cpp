@@ -4,6 +4,9 @@
 #include "fileaux.hh"
 #include "clip.hh"
 #include "medianfilter.hh"
+#include "view.hh"
+#include "psnr.hh"
+#include "bitdepth.hh"
 
 #include <cstdlib>
 #include <cstdio>
@@ -14,9 +17,15 @@
 #define CLEVELS 6
 #define USE_JP2_DICTIONARY 1
 
+#define YUV_SEARCH_LOW 6.80f
+#define YUV_SEARCH_HIGH 8.0f
+#define YUV_SEARCH_STEP 0.10f
+#define YUV_RATIO_DEFAULT 7.20f
+#define MAX_Y_RATIO 0.99
+
 void getJP2Header(unsigned char *JP2, unsigned char *&header, int JP2Size, int &headerSize) {
 
-	for (int ii = 0; ii < JP2Size-1; ii++) {
+	for (int ii = 0; ii < JP2Size - 1; ii++) {
 		if ((unsigned short)(JP2[ii] << 8 | JP2[ii + 1]) == 0xFF90) { /*we have first tile*/
 			headerSize = ii + 1;
 			header = new unsigned char[ii + 1];
@@ -28,7 +37,7 @@ void getJP2Header(unsigned char *JP2, unsigned char *&header, int JP2Size, int &
 	return;
 }
 
-int getJP2DictionaryIndex(unsigned char *header, int headerSize, 
+int getJP2DictionaryIndex(unsigned char *header, int headerSize,
 	std::vector< std::vector<unsigned char>> JP2_dict) {
 
 	for (int ii = 0; ii < JP2_dict.size(); ii++) {
@@ -58,7 +67,7 @@ void updateJP2Dictionary(std::vector< std::vector<unsigned char>> &JP2_dict, uns
 
 }
 
-void readResidualFromDisk(const char *jp2_residual_path_jp2, int &n_bytes_residual, FILE *input_LF, 
+void readResidualFromDisk(const char *jp2_residual_path_jp2, int &n_bytes_residual, FILE *input_LF,
 	std::vector< std::vector<unsigned char>> &JP2_dict) {
 
 	int n_bytes_JP2 = 0;
@@ -73,7 +82,7 @@ void readResidualFromDisk(const char *jp2_residual_path_jp2, int &n_bytes_residu
 
 		dict_index = (int)dict_index_char;
 
-		if (JP2_dict.size() == 0 || dict_index > (int)JP2_dict.size()-1 ) {
+		if (JP2_dict.size() == 0 || dict_index > (int)JP2_dict.size() - 1) {
 
 			n_bytes_residual += (int)fread(&headerSize, sizeof(int), 1, input_LF) * sizeof(int);
 
@@ -108,7 +117,7 @@ void readResidualFromDisk(const char *jp2_residual_path_jp2, int &n_bytes_residu
 
 		n_bytes_residual += (int)fread(&n_bytes_JP2, sizeof(int), 1, input_LF) * sizeof(int);
 		jp2_residual = new unsigned char[n_bytes_JP2]();
-		n_bytes_residual += (int)fread(jp2_residual, sizeof(unsigned char), n_bytes_JP2, input_LF)* sizeof(unsigned char);
+		n_bytes_residual += (int)fread(jp2_residual, sizeof(unsigned char), n_bytes_JP2, input_LF) * sizeof(unsigned char);
 
 	}
 
@@ -120,7 +129,7 @@ void readResidualFromDisk(const char *jp2_residual_path_jp2, int &n_bytes_residu
 	delete[](jp2_residual);
 }
 
-void writeResidualToDisk(const char *jp2_residual_path_jp2, FILE *output_LF_file, int &n_bytes_residual, 
+void writeResidualToDisk(const char *jp2_residual_path_jp2, FILE *output_LF_file, int &n_bytes_residual,
 	std::vector< std::vector<unsigned char>> &JP2_dict) {
 
 	int n_bytes_JP2 = aux_GetFileSize(jp2_residual_path_jp2);
@@ -164,8 +173,8 @@ void writeResidualToDisk(const char *jp2_residual_path_jp2, FILE *output_LF_file
 		n_bytes_JP2 = n_bytes_JP2 - headerSize;
 
 		n_bytes_residual += (int)fwrite(&n_bytes_JP2, sizeof(int), 1, output_LF_file) * sizeof(int);
-		n_bytes_residual += (int)fwrite(jp2_residual+ headerSize, sizeof(unsigned char), n_bytes_JP2, output_LF_file) * sizeof(unsigned char);
-	
+		n_bytes_residual += (int)fwrite(jp2_residual + headerSize, sizeof(unsigned char), n_bytes_JP2, output_LF_file) * sizeof(unsigned char);
+
 	}
 	else {
 
@@ -181,7 +190,7 @@ void writeResidualToDisk(const char *jp2_residual_path_jp2, FILE *output_LF_file
 	}
 
 	delete[](jp2_residual);
-	
+
 }
 
 void decodeResidualJP2(unsigned short *ps, const char *kdu_expand_path, const char *jp2_residual_path_jp2, const char *ppm_residual_path, int ncomp, const int offset, const int maxvali,
@@ -234,17 +243,17 @@ void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char
 		}
 	}
 
-	unsigned short *ycbcr = nullptr;
+	unsigned short *ycbcr = NULL;
 
 	unsigned short *jp2_residual;
 
-	int nc1, nr1,ncomp1;
+	int nc1, nr1, ncomp1;
 
 	for (int icomp = 0; icomp < ncomp; icomp++) {
 		if (aux_read16PGMPPM(ycbcr_pgm_names[icomp], nc1, nr1, ncomp1, jp2_residual))
 		{
-			if (ycbcr == nullptr) {
-				ycbcr = new unsigned short[nc1*nr1*3]();
+			if (ycbcr == NULL) {
+				ycbcr = new unsigned short[nc1*nr1 * 3]();
 			}
 
 			if (YUV_422) {
@@ -253,8 +262,8 @@ void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char
 				}
 				else {
 					for (int cc = 0; cc < nc1; cc++) {
-						memcpy(ycbcr + cc * 2 * nr1 + icomp*nr1*nc1*2, jp2_residual + cc*nr1, sizeof(unsigned short)*nr1);
-						memcpy(ycbcr + (cc*2+1)*nr1 + icomp*nr1*nc1*2, jp2_residual + cc*nr1, sizeof(unsigned short)*nr1);
+						memcpy(ycbcr + cc * 2 * nr1 + icomp*nr1*nc1 * 2, jp2_residual + cc*nr1, sizeof(unsigned short)*nr1);
+						memcpy(ycbcr + (cc * 2 + 1)*nr1 + icomp*nr1*nc1 * 2, jp2_residual + cc*nr1, sizeof(unsigned short)*nr1);
 					}
 					nc1 = nc1 * 2; // since we keep using this variable...
 				}
@@ -263,7 +272,7 @@ void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char
 				memcpy(ycbcr + icomp*nr1*nc1, jp2_residual, sizeof(unsigned short)*nr1*nc1);
 			}
 
-			
+
 
 			delete[](jp2_residual);
 		}
@@ -277,7 +286,7 @@ void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char
 		*(ycbcr + ii) = clip(*(ycbcr + ii), (unsigned short)0, (unsigned short)maxval);
 	}
 
-	unsigned short *rgb = new unsigned short[nr1*nc1*3]();
+	unsigned short *rgb = new unsigned short[nr1*nc1 * 3]();
 
 
 	if (RESIDUAL_16BIT_bool) {
@@ -291,7 +300,7 @@ void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char
 
 	for (int iir = 0; iir < nc1*nr1 * ncomp; iir++)
 	{
-		signed int val = (signed int)*(ps + iir) + (signed int)(rgb[iir]*dv) - offset; // we assume that for 10bit case we have offset as 2^10-1, so go from 2^11 range to 2^10 and lose 1 bit of precision
+		signed int val = (signed int)*(ps + iir) + (signed int)(rgb[iir] * dv) - offset; // we assume that for 10bit case we have offset as 2^10-1, so go from 2^11 range to 2^10 and lose 1 bit of precision
 		val = clip(val, 0, maxvali);
 		*(ps + iir) = (unsigned short)(val);
 	}
@@ -312,13 +321,13 @@ void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_
 	signed int BP = RESIDUAL_16BIT_bool ? 16 : 10;
 	signed int maxval = (1 << BP) - 1;// pow(2, BP) - 1;
 
-	for (int iir = 0; iir < nr*nc*3; iir++) {
-		signed int res_val = ( (((signed int)*(original_intermediate_view + iir)) - ((signed int)*(ps + iir)) + offset) )/dv;
+	for (int iir = 0; iir < nr*nc * 3; iir++) {
+		signed int res_val = ((((signed int)*(original_intermediate_view + iir)) - ((signed int)*(ps + iir)) + offset)) / dv;
 		res_val = clip(res_val, 0, maxval);
 		*(residual_image + iir) = (unsigned short)(res_val);
 	}
 
-	unsigned short *ycbcr = new unsigned short[nr*nc*3]();
+	unsigned short *ycbcr = new unsigned short[nr*nc * 3]();
 
 	if (RESIDUAL_16BIT_bool) {
 		RGB2YCbCr(residual_image, ycbcr, nr, nc, 16);
@@ -337,7 +346,7 @@ void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_
 			rateR = rate_a*rateR;
 		}
 		else {
-			rateR = (1-rate_a)*rateR/2;
+			rateR = (1 - rate_a)*rateR / 2;
 		}
 
 		if (YUV_422) {
@@ -349,7 +358,7 @@ void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_
 				for (int cc = 0; cc < nc; cc += 2) {
 					memcpy(tmp_im + (cc / 2)*nr, ycbcr + cc*nr + nr*nc*icomp, sizeof(unsigned short)*nr);
 				}
-				aux_write16PGMPPM(ycbcr_pgm_names[icomp], nc/2, nr, 1, tmp_im);
+				aux_write16PGMPPM(ycbcr_pgm_names[icomp], nc / 2, nr, 1, tmp_im);
 			}
 		}
 		else {
@@ -358,9 +367,9 @@ void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_
 		}
 
 		char kdu_compress_s[1024];
-	
+
 		sprintf(kdu_compress_s, "\"%s\"%s%s%s%s%s%f%s%d", kdu_compress_path, " -i ", ycbcr_pgm_names[icomp], " -o ", ycbcr_jp2_names[icomp], " -no_weights -full -no_info -precise -rate ", rateR,
-			" Clevels=",CLEVELS);
+			" Clevels=", CLEVELS);
 
 		int status = system_1(kdu_compress_s);
 
@@ -408,4 +417,149 @@ void encodeResidualJP2(const int nr, const int nc, unsigned short *original_inte
 	//std::cout << kdu_compress_s << "\n";
 
 	int status = system_1(kdu_compress_s);
+}
+
+void get_and_write_color_residual_JP2(view *SAI, const char *kdu_compress_path, const char *kdu_expand_path) {
+
+	/* get residual */
+	if (SAI->residual_rate_color > 0)
+	{
+
+		float rate_a1 = 0;
+
+		const bool RESIDUAL_16BIT_bool = RESIDUAL_16BIT ? 1 : 0;
+
+		/* COLOR residual here, lets try YUV */
+
+		sprintf(SAI->pgm_residual_Y_path, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_Y_residual.pgm");
+		sprintf(SAI->jp2_residual_Y_path_jp2, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_Y_residual.jp2");
+
+		sprintf(SAI->pgm_residual_Cb_path, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_Cb_residual.pgm");
+		sprintf(SAI->jp2_residual_Cb_path_jp2, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_Cb_residual.jp2");
+
+		sprintf(SAI->pgm_residual_Cr_path, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_Cr_residual.pgm");
+		sprintf(SAI->jp2_residual_Cr_path_jp2, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_Cr_residual.jp2");
+
+		sprintf(SAI->ppm_residual_path, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_residual.ppm");
+		sprintf(SAI->jp2_residual_path_jp2, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_residual.jp2");
+
+		SAI->ycbcr_pgm_names[0] = SAI->pgm_residual_Y_path;
+		SAI->ycbcr_pgm_names[1] = SAI->pgm_residual_Cb_path;
+		SAI->ycbcr_pgm_names[2] = SAI->pgm_residual_Cr_path;
+
+		SAI->ycbcr_jp2_names[0] = SAI->jp2_residual_Y_path_jp2;
+		SAI->ycbcr_jp2_names[1] = SAI->jp2_residual_Cb_path_jp2;
+		SAI->ycbcr_jp2_names[2] = SAI->jp2_residual_Cr_path_jp2;
+
+
+		if (SAI->yuv_transform) {
+
+			int offset_v = 0;
+
+			if (RESIDUAL_16BIT) {
+				offset_v = (1 << 15) - 1;
+			}
+			else {
+				offset_v = (1 << BIT_DEPTH) - 1;
+			}
+
+			//float rate_a = 6.5 / 8.0;// 7.2 / 8.0;
+
+			if (SAI->yuv_ratio_search) {
+
+				float highest_psnr = 0;
+
+				unsigned short *tmp_im = new unsigned short[SAI->nr*SAI->nc * 3]();
+
+				for (float rate_a = YUV_SEARCH_LOW; rate_a <= YUV_SEARCH_HIGH; rate_a += YUV_SEARCH_STEP) {
+
+					memcpy(tmp_im, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+
+					int ncomp_r = 3;
+
+					if (rate_a / 8.0 < MAX_Y_RATIO) {
+						SAI->has_chrominance = true;
+					}
+					else {
+						SAI->has_chrominance = false;
+						ncomp_r = 1;
+					}
+
+					encodeResidualJP2_YUV(SAI->nr, SAI->nc, SAI->original_color_view, tmp_im, SAI->ycbcr_pgm_names,
+						kdu_compress_path, SAI->ycbcr_jp2_names, SAI->residual_rate_color, ncomp_r, offset_v, rate_a / 8.0f, RESIDUAL_16BIT_bool);
+
+					decodeResidualJP2_YUV(tmp_im, kdu_expand_path, SAI->ycbcr_jp2_names, SAI->ycbcr_pgm_names, ncomp_r, offset_v, (1 << BIT_DEPTH) - 1, RESIDUAL_16BIT_bool);
+
+					double psnr_result_yuv = getYCbCr_422_PSNR(tmp_im, SAI->original_color_view, SAI->nr, SAI->nc, 3, 10);
+
+					if (psnr_result_yuv > highest_psnr) {
+						highest_psnr = (float)psnr_result_yuv;
+						rate_a1 = rate_a;
+					}
+
+					printf("PSNR YUV:\t%f\tratio\t%f/%f\n", highest_psnr, rate_a, 8.0);
+
+				}
+
+				delete[](tmp_im);
+			}
+			else {
+				rate_a1 = (float)YUV_RATIO_DEFAULT;
+			}
+
+			int ncomp_r = 3;
+
+			if (rate_a1 / 8.0 < MAX_Y_RATIO) {
+				SAI->has_chrominance = true;
+			}
+			else {
+				SAI->has_chrominance = false;
+				ncomp_r = 1;
+			}
+
+			unsigned short *tmpim = new unsigned short[SAI->nr*SAI->nc * 3]();
+			memcpy(tmpim, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+
+			encodeResidualJP2_YUV(SAI->nr, SAI->nc, SAI->original_color_view, SAI->color, SAI->ycbcr_pgm_names,
+				kdu_compress_path, SAI->ycbcr_jp2_names, SAI->residual_rate_color, ncomp_r, offset_v, rate_a1 / (float)8.0, RESIDUAL_16BIT_bool);
+
+			decodeResidualJP2_YUV(SAI->color, kdu_expand_path, SAI->ycbcr_jp2_names, SAI->ycbcr_pgm_names, ncomp_r, offset_v, (1 << BIT_DEPTH) - 1, RESIDUAL_16BIT_bool);
+
+			/* also compete against no yuv transformation */
+
+			double psnr_result_yuv_w_trans = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, 10);
+
+			offset_v = (1 << BIT_DEPTH) - 1;
+
+			encodeResidualJP2(SAI->nr, SAI->nc, SAI->original_color_view, tmpim, SAI->ppm_residual_path,
+				kdu_compress_path, SAI->jp2_residual_path_jp2, SAI->residual_rate_color, 3, offset_v, RESIDUAL_16BIT_bool);
+
+			int ncomp1 = 0;
+			decodeResidualJP2(tmpim, kdu_expand_path, SAI->jp2_residual_path_jp2, SAI->ppm_residual_path, ncomp1, offset_v, offset_v, RESIDUAL_16BIT_bool);
+
+			double psnr_result_yuv_wo_trans = getYCbCr_422_PSNR(tmpim, SAI->original_color_view, SAI->nr, SAI->nc, 3, 10);
+
+			if (psnr_result_yuv_wo_trans > psnr_result_yuv_w_trans) {
+				memcpy(SAI->color, tmpim, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+				SAI->yuv_transform = false;
+				rate_a1 = 0.0;
+			}
+
+			delete[](tmpim);
+
+		}
+		else {
+
+			int offset_v = (1 << BIT_DEPTH) - 1;
+
+			encodeResidualJP2(SAI->nr, SAI->nc, SAI->original_color_view, SAI->color, SAI->ppm_residual_path,
+				kdu_compress_path, SAI->jp2_residual_path_jp2, SAI->residual_rate_color, 3, offset_v, RESIDUAL_16BIT_bool);
+
+			int ncomp1 = 0;
+			decodeResidualJP2(SAI->color, kdu_expand_path, SAI->jp2_residual_path_jp2, SAI->ppm_residual_path, ncomp1, offset_v, offset_v, RESIDUAL_16BIT_bool);
+
+		}
+
+		SAI->has_color_residual = true;
+	}
 }

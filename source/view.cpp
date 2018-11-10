@@ -44,7 +44,7 @@ void initView(view* view)
 
 	view->use_median = false;
 
-	view->yuv_transform = true;
+	view->yuv_transform = false;
 
 	view->has_color_residual = false;
 	view->has_depth_residual = false;
@@ -68,6 +68,20 @@ void initView(view* view)
 	
 	view->ncomp = 0;
 
+	view->yuv_ratio_search = false;
+
+	view->original_color_view = nullptr;
+}
+
+bool loadOriginalColor(view* SAI) {
+	return aux_read16PGMPPM(SAI->path_input_ppm, SAI->nc, SAI->nr, SAI->ncomp, SAI->original_color_view);
+}
+
+void unloadOriginalColor(view *SAI) {
+	if (SAI->original_color_view != nullptr) {
+		delete[](SAI->original_color_view);
+		SAI->original_color_view = nullptr;
+	}
 }
 
 bool loadColor(view* SAI) {
@@ -157,5 +171,33 @@ bool writeWarpedLabelIm(view *SAI, view *ref_view, const int32_t *warpedLabelIm)
 		return true;
 	}
 
+
+}
+
+void cleanView(view *SAI) {
+
+	if (SAI->color != nullptr)
+		delete[](SAI->color);
+	if (SAI->depth != nullptr)
+		delete[](SAI->depth);
+	if (SAI->references != nullptr)
+		delete[](SAI->references);
+	if (SAI->depth_references != nullptr)
+		delete[](SAI->depth_references);
+	if (SAI->merge_weights != nullptr)
+		delete[](SAI->merge_weights);
+	if (SAI->sparse_weights != nullptr)
+		delete[](SAI->sparse_weights);
+	if (SAI->bmask != nullptr)
+		delete[](SAI->bmask);
+	if (SAI->seg_vp != nullptr)
+		delete[](SAI->seg_vp);
+	if (SAI->sparse_mask != nullptr)
+		delete[](SAI->sparse_mask);
+	if (SAI->segmentation != nullptr)
+		delete[](SAI->segmentation);
+	if (SAI->label_im != nullptr) {
+		delete[](SAI->label_im);
+	}
 
 }

@@ -78,13 +78,15 @@ void applyGlobalSparseFilter(view *view0){
 
 }
 
-void getGlobalSparseFilter(view *view0, unsigned short *original_color_view)
+void getGlobalSparseFilter(view *view0)
 {
 
 	int nr = view0->nr;
 	int nc = view0->nc;
 	int NNt = view0->NNt;
 	int Ms = view0->Ms;
+
+	unsigned short *original_color_view = view0->original_color_view;
 
 	unsigned char *Regr0 = new unsigned char[Ms]();
 	int32_t *theta0 = new int32_t[Ms]();

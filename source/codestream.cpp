@@ -41,15 +41,15 @@ void viewHeaderToCodestream(int &n_bytes_prediction, view *SAI, FILE *output_LF_
 	}
 
 	if (!SAI->use_median) {
-		if (SAI->stdd < 0.001) {
+		if (SAI->sigma < 0.001) {
 			if (SAI->has_color_references) {
 				/* use LS merging weights */
-				n_bytes_prediction += (int)fwrite(SAI->merge_weights, sizeof(signed short), SAI->NB / 2, output_LF_file) * sizeof(signed short);
+				n_bytes_prediction += (int)fwrite(SAI->merge_weights, sizeof(signed short), getNB(SAI) / 2, output_LF_file) * sizeof(signed short);
 			}
 		}
 		else {
 			/* use standard deviation */
-			n_bytes_prediction += (int)fwrite(&SAI->stdd, sizeof(float), 1, output_LF_file) * sizeof(float);
+			n_bytes_prediction += (int)fwrite(&SAI->sigma, sizeof(float), 1, output_LF_file) * sizeof(float);
 		}
 	}
 
@@ -141,17 +141,15 @@ void codestreamToViewHeader( int &n_bytes_prediction, view *SAI, FILE *input_LF,
 		}
 	}
 
-	SAI->NB = (1 << SAI->n_references)*SAI->n_references;
-
 	if (!SAI->use_median) {
-		if (SAI->stdd < 0.001) {
+		if (SAI->sigma < 0.001) {
 			if (SAI->n_references > 0) {
-				SAI->merge_weights = new signed short[SAI->NB / 2]();
-				n_bytes_prediction += (int)fread(SAI->merge_weights, sizeof(signed short), SAI->NB / 2, input_LF) * sizeof(signed short);
+				SAI->merge_weights = new signed short[getNB(SAI) / 2]();
+				n_bytes_prediction += (int)fread(SAI->merge_weights, sizeof(signed short), getNB(SAI) / 2, input_LF) * sizeof(signed short);
 			}
 		}
 		else {
-			n_bytes_prediction += (int)fread(&SAI->stdd, sizeof(float), 1, input_LF) * sizeof(float);
+			n_bytes_prediction += (int)fread(&SAI->sigma, sizeof(float), 1, input_LF) * sizeof(float);
 		}
 	}
 

@@ -5,7 +5,9 @@
 
 #define INIT_DISPARITY_VALUE -10000.0 /* Bug fix from VM1.0. Introduced because -1.0 is no longer a good initial value since we can have negative disparity as well.*/
 
-void warpView0_to_View1(view *view0, view *view1, unsigned short *&warpedColor, unsigned short *&warpedDepth, float *&DispTarg, int ncomp=3);
+void warp_all_references_to_current_view(view *SAI);
+
+void warpView0_to_View1(view *view0, view *view1, const int ncomp, const int ref_idx);
 
 void getDisparity(const float y0, const float y1, const float x1, const float x2, float *inverse_depth_view_0, const int nr, const int nc,
 	float *DM_COL, float *DM_ROW);

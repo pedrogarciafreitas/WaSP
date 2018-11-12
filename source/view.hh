@@ -44,7 +44,7 @@ struct view{
 	float residual_rate_color;
 	float residual_rate_depth;
 
-	float stdd;
+	float sigma;
 
 	int NNt, Ms; //for global sparse, NNt defines the neighborhood size [ -NNt:NNt,-NNt:NNt ], Ms is the filter order
 
@@ -110,9 +110,19 @@ struct view{
 
 	unsigned short *original_color_view;
 
+	unsigned short **warped_color_views;
+	unsigned short **warped_depth_views;
+	float **occlusion_masks;
+
+	view **color_reference_views; // parents
+	view **depth_reference_views;
+
 };
 
+void initializeWarpingArrays(view *SAI);
+void deinitializeWarpingArrays(view *SAI);
 
+void setViewFilePaths(view* SAI, const char *output_dir, const char *input_dir);
 
 void initView(view* view);
 
@@ -126,6 +136,9 @@ void unloadOriginalColor(view *SAI);
 
 bool loadLabels(view* SAI);
 void unloadLabels(view *SAI);
+
+void setBMask(view *SAI);
+int getNB(view *SAI);
 
 int32_t *loadWarpedLabelIm(view *SAI, view *ref_view);
 bool writeWarpedLabelIm(view *SAI, view *ref_view, const int32_t *warpedLabelIm);

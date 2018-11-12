@@ -6,52 +6,22 @@
 
 #include <cstring>
 
-void setBMask(view *view0) 
-{
-
-	/* sets the binary mask used to derive view availability in each of the MMM classes,
-	size of the binary mask is [MMM x n_references] */
-
-	int MMM = 1 << view0->n_references;// pow(2, view0->n_references);
-
-	bool *bmask = new bool[MMM * view0->n_references]();
-
-	(view0)->bmask = bmask;
-
-	for (int ij = 0; ij < MMM; ij++) {
-
-		int uu = ij;
-
-		for (int ik = view0->n_references - 1; ik >= 0; ik--) {
-
-			//if (floor(uu / pow(2, ik)) > 0)
-			if (floor(uu / (1<<ik) ) > 0)
-			{
-				//uu = uu - pow(2, ik);
-				uu = uu - (1<<ik);
-				bmask[ij + ik * MMM] = 1;
-			}
-
-		}
-	}
-}
-
-void getViewMergingLSWeights_N(view *view0, unsigned short **warpedColorViews, float **DispTargs, const unsigned short *original_color_view)
+void getViewMergingLSWeights_N(view *view0)
 {
 
 	/* This function puts the LS view merging weights into LSw */
 
-	int n_references = (view0)->n_references;
-	int nr = (view0)->nr;
-	int nc = (view0)->nc;
+	int n_references = view0->n_references;
+	int nr = view0->nr;
+	int nc = view0->nc;
 
 	signed short *LScoeffs = (view0)->merge_weights;
 
 	int MMM = 1 << n_references;// pow(2, n_references);
 	
-	bool *bmask = (view0)->bmask;
+	bool *bmask = view0->bmask;
 
-	unsigned short *seg_vp = (view0)->seg_vp;
+	unsigned short *seg_vp = view0->seg_vp;
 
 	/* go through all regions, collect regressors from references */
 	unsigned short **reference_view_pixels_in_classes = new unsigned short*[MMM * n_references]();
@@ -59,7 +29,7 @@ void getViewMergingLSWeights_N(view *view0, unsigned short **warpedColorViews, f
 	/* also collect desired values */
 	unsigned short **original_view_in_classes = new unsigned short*[MMM]();
 
-	int *number_of_pixels_per_region = (view0)->number_of_pixels_per_region;
+	int *number_of_pixels_per_region = view0->number_of_pixels_per_region;
 
 	for (int ij = 1; ij < MMM; ij++){ // region
 
@@ -73,7 +43,7 @@ void getViewMergingLSWeights_N(view *view0, unsigned short **warpedColorViews, f
 		for (int ii = 0; ii < nr*nc; ii++){
 			if (seg_vp[ii] == ij){
 				for (int icomp = 0; icomp < 3; icomp++)
-					*(p3s + jj + icomp*NN) = *(original_color_view + ii + icomp*nr*nc);
+					*(p3s + jj + icomp*NN) = *(view0->original_color_view + ii + icomp*nr*nc);
 				jj++;
 			}
 		}
@@ -86,7 +56,7 @@ void getViewMergingLSWeights_N(view *view0, unsigned short **warpedColorViews, f
 				reference_view_pixels_in_classes[ij + ik * MMM] = new unsigned short[NN * 3]();
 
 				unsigned short *ps = reference_view_pixels_in_classes[ij + ik * MMM];
-				unsigned short *pss = warpedColorViews[ik];
+				unsigned short *pss = view0->warped_color_views[ik];
 
 
 				jj = 0;
@@ -108,7 +78,7 @@ void getViewMergingLSWeights_N(view *view0, unsigned short **warpedColorViews, f
 
 	/* run fastOLS on the classes */
 
-	signed short *thetas = new signed short[MMM * n_references]();
+	double *thetas = new double[MMM * n_references]();
 
 	for (int ij = 1; ij < MMM; ij++){
 
@@ -181,7 +151,7 @@ void getViewMergingLSWeights_N(view *view0, unsigned short **warpedColorViews, f
 		}
 
 		for (int ii = 0; ii < M; ii++){
-			thetas[ij + MMM * iks[PredRegr0[ii]]] = (signed short)floor(*(PredTheta0 + ii)*(signed short)(1 << BIT_DEPTH_MERGE) + 0.5);// pow(2, BIT_DEPTH_MERGE) + 0.5);
+			thetas[ij + MMM * iks[PredRegr0[ii]]] = *(PredTheta0 + ii);// (signed short)floor(*(PredTheta0 + ii)*(signed short)(1 << BIT_DEPTH_MERGE) + 0.5);// pow(2, BIT_DEPTH_MERGE) + 0.5);
 		}
 
 		delete[](iks);
@@ -193,16 +163,7 @@ void getViewMergingLSWeights_N(view *view0, unsigned short **warpedColorViews, f
 
 	}
 
-	/* columnwise collecting of thetas */
-	int in = 0;
-	for (int ik = 0; ik < n_references; ik++){
-		for (int ij = 0; ij < MMM; ij++){
-			if (bmask[ij + ik * MMM]){
-				LScoeffs[in] = thetas[ij + MMM * ik];
-				in++;
-			}
-		}
-	}
+	columnwise_collecting_of_thetas(view0, thetas);
 
 	delete[](thetas);
 
@@ -218,22 +179,18 @@ void getViewMergingLSWeights_N(view *view0, unsigned short **warpedColorViews, f
 
 	delete[](original_view_in_classes);
 	delete[](reference_view_pixels_in_classes);
-	//delete[](seg_vp);
-	//delete[](number_of_pixels_per_region);
 
 }
 
-void initSegVp(view *view0, float **DispTargs) {
+void initSegVp(view *view0) {
 
 	int nr = view0->nr;
 	int nc = view0->nc;
 	int n_references = view0->n_references;
 
-	unsigned short *seg_vp = new unsigned short[nr*nc]();
+	view0->seg_vp = new unsigned short[nr*nc]();
 
-	(view0)->seg_vp = seg_vp;
-
-	int MMM = 1 << view0->n_references;// pow(2, (view0)->n_references);
+	int MMM = 1 << view0->n_references;
 
 	int *number_of_pixels_per_region = new int[MMM]();
 
@@ -242,12 +199,12 @@ void initSegVp(view *view0, float **DispTargs) {
 		unsigned short ci = 0;
 
 		for (int ik = 0; ik < n_references; ik++) {
-			float *pf = DispTargs[ik];
+			float *pf = view0->occlusion_masks[ik];
 			if (*(pf + ii) > INIT_DISPARITY_VALUE)
 				ci = ci + (unsigned short)( 1 << ik );// pow(2, ik);
 		}
 
-		seg_vp[ii] = ci;
+		view0->seg_vp[ii] = ci;
 
 		number_of_pixels_per_region[ci]++;
 
@@ -256,69 +213,100 @@ void initSegVp(view *view0, float **DispTargs) {
 	view0->number_of_pixels_per_region = number_of_pixels_per_region;
 }
 
-void initViewW(view *view0, float **DispTargs) {
-
-	/* sets some of the parameters for a view in the light view structure */
-
-	(view0)->NB = (1 << view0->n_references)*view0->n_references; // (pow(2, (view0)->n_references)*(view0)->n_references);
-	
-	if ((view0)->merge_weights == nullptr) {
-		signed short *merge_weights = new signed short[(view0)->NB / 2]();
-		(view0)->merge_weights = merge_weights;
-	}
-
-	float *merge_weights_float = new float[(view0)->NB]();
-
-	(view0)->merge_weights_float = merge_weights_float;
+void initViewW(view *view0) {
 
 	setBMask(view0);
 
-	initSegVp(view0, DispTargs);
+	initMergingWeightArrays(view0);
+
+	initSegVp(view0);
 
 }
 
-void getGeomWeight(view *view0, view *LF) {
+void initMergingWeightArrays(view *view0) {
 
-	float stdd = view0->stdd;
+	deinitMergingWeightArrays(view0);
+
+	if (view0->merge_weights == nullptr) {
+		view0->merge_weights = new signed short[ getNB(view0) / 2 ]();
+	}
+
+	if (view0->merge_weights_float == nullptr){
+		view0->merge_weights_float = new float[ getNB(view0) ]();
+	}
+
+}
+
+void deinitMergingWeightArrays(view *view0) {
+
+	if (view0->merge_weights != nullptr) {
+		delete[](view0->merge_weights);
+	}
+
+	if (view0->merge_weights_float != nullptr) {
+		delete[](view0->merge_weights_float);
+	}
+
+}
+
+void getGeomWeight(view *view0) {
+
+	/* we don't use LS weights but something derived on geometric distance in view array*/
+
+	float sigma = view0->sigma;
 
 	int MMM = 1 << view0->n_references;// pow(2, (view0)->n_references);
 
-	double *thetas = new double[view0->NB]();
+	double *thetas = new double[getNB(view0)]();
 
-	bool *bmask = (view0)->bmask;
+	bool *bmask = view0->bmask;
 
 	for (int ii = 0; ii < MMM; ii++) {
 		double sumw = 0;
 
-		for (int ij = 0; ij < (view0)->n_references; ij++) {
-			view *view1 = LF + (view0)->references[ij];
+		for (int ij = 0; ij < view0->n_references; ij++) {
+			view *view1 = view0->color_reference_views[ij];
 			double vdistance = (view0->x - view1->x)*(view0->x - view1->x) + (view0->y - view1->y)*(view0->y - view1->y);
 			if (bmask[ii + ij * MMM]) {
-				thetas[ii + ij * MMM] = exp(-(vdistance) / (2 * stdd*stdd));
-				sumw = sumw + thetas[ii + ij * MMM];
+				thetas[ii + ij * MMM] = exp( -(vdistance) / (2 * sigma*sigma) );
+				//printf("exp(-(%3.3f) / (2 * %3.3f*%3.3f))=%3.3f\n", vdistance, sigma, sigma, thetas[ii + ij * MMM]);
+				//printf("sigma %3.3f\n", sigma);
+				//printf("thetas[ii+ij*MMM]=%3.3f\n", ii, ij, MMM, thetas[ii + ij * MMM]);
+				sumw += thetas[ii + ij * MMM];
 			}
 		}
-		for (int ij = 0; ij < (view0)->n_references; ij++)
+		//printf("sumw %3.3f\n", sumw);
+		for (int ij = 0; ij < view0->n_references; ij++) {
 			thetas[ii + ij * MMM] = thetas[ii + ij * MMM] / sumw;
+		}
 	}
 
-	/* columnwise collecting of thetas */
-	signed short *LScoeffs = (view0)->merge_weights;
-	int in = 0;
-	for (int ik = 0; ik < (view0)->n_references; ik++) {
-		for (int ij = 0; ij < MMM; ij++) {
-			if (bmask[ij + ik * MMM]) {
-				LScoeffs[in] = (signed short)floor(thetas[ij + MMM * ik] * (signed short)(1 << BIT_DEPTH_MERGE) + 0.5);// pow(2, BIT_DEPTH_MERGE) + 0.5);
-				in++;
-			}
-		}
-	}
+	columnwise_collecting_of_thetas(view0, thetas);
 
 	delete[](thetas);
 
 }
 
-void mergeMedian_N(unsigned short **warpedColorViews, float **DispTargs, view *view0, const int ncomponents) {
+void columnwise_collecting_of_thetas(view *view0, double *thetas) {
+	/* columnwise collecting of thetas */
+
+	int MMM = 1 << view0->n_references;
+
+	signed short *LScoeffs = view0->merge_weights;
+	int in = 0;
+	for (int ik = 0; ik < view0->n_references; ik++) {
+		for (int ij = 0; ij < MMM; ij++) {
+			if (view0->bmask[ij + ik * MMM]) {
+				view0->merge_weights[in] = (signed short)floor(thetas[ij + MMM * ik] * (signed short)(1 << BIT_DEPTH_MERGE) + 0.5);
+				in++;
+			}
+		}
+	}
+}
+
+void mergeMedian_N(view *view0, const int ncomponents) {
+
+	/* merge color with median */
 
 	unsigned short *AA2 = new unsigned short[view0->nr*view0->nc*ncomponents]();
 
@@ -328,8 +316,8 @@ void mergeMedian_N(unsigned short **warpedColorViews, float **DispTargs, view *v
 			std::vector< unsigned short > vals;
 			for (int ik = 0; ik < view0->n_references; ik++) {
 
-				float *pf = DispTargs[ik];
-				unsigned short *ps = warpedColorViews[ik];
+				float *pf = view0->occlusion_masks[ik];
+				unsigned short *ps = view0->warped_color_views[ik];
 
 				if (*(pf + ii) > INIT_DISPARITY_VALUE) {
 
@@ -350,8 +338,10 @@ void mergeMedian_N(unsigned short **warpedColorViews, float **DispTargs, view *v
 
 }
 
-void mergeWarped_N(unsigned short **warpedColorViews, float **DispTargs, view *view0, const int ncomponents)
+void mergeWarped_N(view *view0, const int ncomponents)
 {
+
+	/* merge color with prediction */
 
 	int MMM = 1 << view0->n_references;// pow(2, (view0)->n_references);
 
@@ -362,7 +352,6 @@ void mergeWarped_N(unsigned short **warpedColorViews, float **DispTargs, view *v
 	for (int ii = 0; ii < MMM * (view0)->n_references; ii++){
 		if (bmask[ii]){
 			(view0)->merge_weights_float[ii] = ((float)(view0)->merge_weights[uu++]) / (float)(1 << BIT_DEPTH_MERGE);// pow(2, BIT_DEPTH_MERGE);
-			//std::cout << (view0)->merge_weights_float[ii] << "\t";
 			//printf("%f\t", (view0)->merge_weights_float[ii]);
 		}
 		else{
@@ -385,7 +374,7 @@ void mergeWarped_N(unsigned short **warpedColorViews, float **DispTargs, view *v
 		int ci = seg_vp[ii];
 
 		for (int ik = 0; ik < n_views; ik++){
-			unsigned short *ps = warpedColorViews[ik];
+			unsigned short *ps = view0->warped_color_views[ik];
 			for (int icomp = 0; icomp < 3; icomp++){
 				AA1[ii + icomp*nr*nc] = AA1[ii + icomp*nr*nc] + LSw[ci + ik * MMM] * ((float)(*(ps + ii + icomp*nr*nc)));
 			}
@@ -404,8 +393,6 @@ void mergeWarped_N(unsigned short **warpedColorViews, float **DispTargs, view *v
 
 	memcpy((view0)->color, AA2, sizeof(unsigned short)*nr*nc*ncomponents);
 
-	//delete[](seg_vp);
-	//delete[](bmask);
 	delete[](AA1);
 	delete[](AA2);
 

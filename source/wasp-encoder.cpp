@@ -23,14 +23,13 @@
 #include "codestream.hh"
 #include "kmeans.hh"
 #include "connected_components.hh"
+#include "configLoader.hh"
 
 #define USE_difftest_ng false
 
 #define STD_SEARCH_LOW 10
 #define STD_SEARCH_HIGH 250
 #define STD_SEARCH_STEP 10
-
-#define SAVE_PARTIAL_WARPED_VIEWS false
 
 #ifndef FLT_MAX
 #define FLT_MAX          3.402823466e+38F        // max value
@@ -49,140 +48,12 @@ int main(int argc, char** argv) {
 	sprintf(kdu_compress_path, "%s%s", kakadu_dir, "/kdu_compress");
 	sprintf(kdu_expand_path, "%s%s", kakadu_dir, "/kdu_expand");
 
-	FILE *filept;
+	global_parameters *global_params = load_global_parameters(config_file);
+	view *LF = load_config_and_init_LF(config_file);
 
-	filept = fopen(config_file, "rb");
-
-	int n_views_total;
-	fread(&n_views_total, sizeof(int), 1, filept); /*reading*/
-
-	n_views_total = 10;
-
-	view *LF = new view[n_views_total](); /* one dimensional view vector */
-
-	int maxR = 0, maxC = 0;
-
-	bool YUV_TRANSFORM = false;
-	bool YUV_RATIO_SEARCH = false;
-	bool STD_SEARCH = false;
-
-	int yuv_transform_s,yuv_ratio_search_s,std_search_s;
-	fread(&yuv_transform_s, sizeof(int), 1, filept); /*reading*/
-	fread(&yuv_ratio_search_s, sizeof(int), 1, filept); /*reading*/
-	fread(&std_search_s, sizeof(int), 1, filept); /*reading*/
-
-	YUV_TRANSFORM = yuv_transform_s > 0 ? true : false;
-	YUV_RATIO_SEARCH = yuv_ratio_search_s > 0 ? true : false;
-	STD_SEARCH = std_search_s > 0 ? true : false;
-
-	unsigned short MINIMUM_DEPTH = 0;
-
-	for (int ii = 0; ii < n_views_total; ii++) {
-
-		view *SAI = LF + ii;
-
-		initView(SAI);
-
-		SAI->i_order = ii;
-
-		fread(&(SAI->r), sizeof(int), 1, filept); /*reading*/
-		fread(&(SAI->c), sizeof(int), 1, filept); /*reading*/
-
-		/* find number of rows and cols */
-		maxR = (SAI->r+1 > maxR) ? SAI->r + 1 : maxR;
-		maxC = (SAI->c+1 > maxC) ? SAI->c + 1 : maxC;
-
-		int xx = 0, yy = 0;
-
-		fread(&xx, sizeof(int), 1, filept); /*reading*/
-		fread(&yy, sizeof(int), 1, filept); /*reading*/
-
-		if ( abs(xx) > 0) {
-			SAI->has_x_displacement = true;
-			SAI->x = static_cast<float>(xx) / 100000;
-		}
-
-		if ( abs(yy) > 0) {
-			SAI->has_y_displacement = true;
-			SAI->y = -static_cast<float>(yy) / 100000;
-		}
-
-		int rate_color, rate_depth;
-
-		fread(&rate_color, sizeof(int), 1, filept); /*reading*/
-		fread(&rate_depth, sizeof(int), 1, filept); /*reading*/
-
-		SAI->residual_rate_color = ((float)rate_color) / 100000;
-		SAI->residual_rate_depth = ((float)rate_depth) / 100000;
-
-		fread(&SAI->Ms, sizeof(int), 1, filept); /*reading*/
-		fread(&SAI->NNt, sizeof(int), 1, filept); /*reading*/
-
-		int stdd = 0;
-
-		fread(&stdd, sizeof(int), 1, filept); /*reading*/
-		SAI->stdd = ((float)stdd) / 100000;
-
-		unsigned short tmpminv;
-
-		fread(&tmpminv, sizeof(int), 1, filept); /*reading, if we have negative inverse depth,
-												   for example in lenslet, we need to subtract min_inv_d
-												   from the inverse depth maps*/
-		if (ii == 0) {
-			if (tmpminv > 0) {
-				MINIMUM_DEPTH = tmpminv;
-			}
-		}
-
-		if (MINIMUM_DEPTH > 0) {
-			//SAI->has_min_inv_depth = true;
-			SAI->min_inv_d = (int)MINIMUM_DEPTH;
-		}
-
-		fread(&(SAI->n_references), sizeof(int), 1, filept); /*reading*/
-
-		if (SAI->n_references > 0) {
-
-			SAI->has_color_references = true;
-
-			SAI->references = new int[SAI->n_references]();
-
-			fread(SAI->references, sizeof(int), SAI->n_references, filept); /*reading*/
-
-		}
-
-		fread(&(SAI->n_depth_references), sizeof(int), 1, filept); /*reading*/
-
-		if (SAI->n_depth_references > 0) {
-
-			SAI->has_depth_references = true;
-
-			SAI->depth_references = new int[SAI->n_depth_references]();
-
-			fread(SAI->depth_references, sizeof(int), SAI->n_depth_references, filept); /*reading*/
-
-		}
-
-		fread(&SAI->has_segmentation, sizeof(int), 1, filept); // new,13.06.18 /*reading*/
-
-		sprintf(SAI->output_dir, "%s", output_dir);
-		sprintf(SAI->input_dir, "%s", input_dir);
-
-		sprintf(SAI->path_input_ppm, "%s%c%03d_%03d%s", SAI->input_dir, '/', SAI->c, SAI->r, ".ppm");
-		sprintf(SAI->path_input_pgm, "%s%c%03d_%03d%s", SAI->input_dir, '/', SAI->c, SAI->r, ".pgm");
-
-		sprintf(SAI->path_input_seg, "%s%c%03d_%03d%s", SAI->input_dir, '/', SAI->c, SAI->r, "_segmentation.pgm");
-
-		sprintf(SAI->path_out_ppm, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, ".ppm");
-		sprintf(SAI->path_out_pgm, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, ".pgm");
-
-		sprintf(SAI->path_label_im, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_im_labels.int32");
-
-		SAI->yuv_ratio_search = YUV_RATIO_SEARCH;
-		SAI->yuv_transform = YUV_TRANSFORM;
-
+	for (int ii = 0; ii < global_params->n_views_total; ii++) {
+		setViewFilePaths(LF + ii, output_dir, input_dir);
 	}
-	fclose(filept);
 
 	/* to get effiency from multiple JP2 files, we remove parts of the files
 	which are repetative over all files. For this we have a minimalistic 
@@ -194,14 +65,16 @@ int main(int argc, char** argv) {
 	unsigned short *original_color_view = nullptr;
 	aux_read16PGMPPM(LF->path_input_ppm, LF->nc, LF->nr, ncomp1, original_color_view);
 	delete[](original_color_view);
+
+	for (int ii = 0; ii < global_params->n_views_total; ii++) {
+		(LF+ii)->nr = LF->nr;
+		(LF+ii)->nc = LF->nc;
+	}
 	
 	/* predict and get residual for INVERSE DEPTH at all views */
-	for (int ii = 0; ii < n_views_total; ii++) {
+	for (int ii = 0; ii < global_params->n_views_total; ii++) {
 
 		view *SAI = LF + ii;
-
-		SAI->nr = LF->nr;
-		SAI->nc = LF->nc;
 
 		printf("Predicting inverse depth view %03d_%03d\n", SAI->c, SAI->r);
 
@@ -250,7 +123,7 @@ int main(int argc, char** argv) {
 	}
 
 	/* get segmentation from inverse depth for all views*/
-	for (int ii = 0; ii < n_views_total; ii++) {
+	for (int ii = 0; ii < global_params->n_views_total; ii++) {
 
 		view *SAI = LF + ii;
 
@@ -302,7 +175,7 @@ int main(int argc, char** argv) {
 	}
 
 	/* warp labeling for all views with parents.*/
-	for (int ii = 0; ii < n_views_total; ii++) {
+	for (int ii = 0; ii < global_params->n_views_total; ii++) {
 
 		view *SAI = LF + ii;
 
@@ -367,7 +240,7 @@ int main(int argc, char** argv) {
 	}
 
 	/* predict in default mode (VM1.0,VM1.1) and obtain residual for COLOR at all views */
-	for (int ii = 0; ii < n_views_total; ii++) {
+	for (int ii = 0; ii < global_params->n_views_total; ii++) {
 
 		view *SAI = LF + ii;
 
@@ -380,114 +253,73 @@ int main(int argc, char** argv) {
 		/* color prediction */
 		if (SAI->n_references > 0) {
 
-			/* holds partial warped views for ii */
-			unsigned short **warped_color_views = new unsigned short*[SAI->n_references]();
-			unsigned short **warped_depth_views = new unsigned short*[SAI->n_references]();
-			float **DispTargs = new float*[SAI->n_references]();
+			initializeWarpingArrays(SAI);
 
-			for (int ij = 0; ij < SAI->n_references; ij++)
-			{
+			warp_all_references_to_current_view(SAI);
 
-				view *ref_view = LF + SAI->references[ij];
-
-				loadColor(ref_view);
-				loadInverseDepth(ref_view);
-
-				/* FORWARD warp color AND depth */
-				warpView0_to_View1(ref_view, SAI, warped_color_views[ij], warped_depth_views[ij], DispTargs[ij]);
-
-				unloadColor(ref_view);
-				unloadInverseDepth(ref_view);
-
-				if (SAVE_PARTIAL_WARPED_VIEWS) {
-
-					char tmp_str[1024];
-
-					sprintf(tmp_str, "%s/%03d_%03d%s%03d_%03d%s", SAI->output_dir, (ref_view)->c, (ref_view)->r, "_warped_to_", SAI->c, SAI->r, ".ppm");
-					aux_write16PGMPPM(tmp_str, SAI->nc, SAI->nr, 3, warped_color_views[ij]);
-
-					sprintf(tmp_str, "%s/%03d_%03d%s%03d_%03d%s", SAI->output_dir, (ref_view)->c, (ref_view)->r, "_warped_to_", SAI->c, SAI->r, ".pgm");
-					aux_write16PGMPPM(tmp_str, SAI->nc, SAI->nr, 1, warped_depth_views[ij]);
-
-				}
-
-				//FILE *tmpf;
-				//sprintf(tmp_str, "%s%03d_%03d%s%03d_%03d%s", SAI->output_dir, (ref_view)->c, (ref_view)->r, "_warped_to_", SAI->c, SAI->r, "_DispTarg.float");
-				//tmpf = fopen(tmp_str, "wb");
-				//fwrite(DispTargs[ij], sizeof(float), SAI->nr * SAI->nc, tmpf);
-				//fclose(tmpf);
-
-			}
-
-			//SAI->warp_psnr = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, 10);
-
-			initViewW(SAI, DispTargs);
+			initViewW(SAI);
 
 			/* get LS weights */
-			if (SAI->stdd < 0.0001) {
-				getViewMergingLSWeights_N(SAI, warped_color_views, DispTargs, SAI->original_color_view);
+			if (SAI->sigma < 0.0001) {
+				getViewMergingLSWeights_N(SAI);
 				/* merge color with prediction */
-				mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
+				mergeWarped_N(SAI, 3);
 				/* hole filling for color*/
 				holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
 			}
 			else {
-				/* get baseline with median, we then study whether weighting improves */
-				/* merge color with median */
+
 				int startt = clock();
-				mergeMedian_N(warped_color_views, DispTargs, SAI, 3);
-				std::cout << "time elapsed in color median merging\t" << (float)( (int)clock() - startt ) / CLOCKS_PER_SEC << "\n";
+
+				mergeMedian_N(SAI, 3);
 				holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
 
-				//double psnr_med = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, 10);
+				//std::cout << "time elapsed in color median merging\t" << (float)((int)clock() - startt) / CLOCKS_PER_SEC << "\n";
+
 				double psnr_med = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, 10);
 
 				unsigned short *tmp_m = new unsigned short[SAI->nr*SAI->nc*3]();
 				memcpy(tmp_m, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
 
-				double psnr_w = 0;
+				
 
-				if (STD_SEARCH) {
+				if (global_params->STD_SEARCH) {
 
 					float stdi = 0;
+					double psnr_w = 0;
 
-					for (float stds = STD_SEARCH_LOW; stds < STD_SEARCH_HIGH; stds += STD_SEARCH_STEP) {
-						SAI->stdd = stds;
-						/* we don't use LS weights but something derived on geometric distance in view array*/
-						getGeomWeight(SAI, LF);
-						/* merge color with prediction */
-						mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
-						/* hole filling for color*/
+					for (SAI->sigma = 0; SAI->sigma < STD_SEARCH_HIGH; SAI->sigma += STD_SEARCH_STEP) {
+
+						getGeomWeight(SAI);
+						mergeWarped_N(SAI, 3);
 						holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+
 						double tpsnr = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
-						//double tpsnr = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, 10);
 
 						if (tpsnr > psnr_w) {
 							psnr_w = tpsnr;
-							stdi = SAI->stdd;
+							stdi = SAI->sigma;
 						}
 
 					}
 
-					SAI->stdd = stdi;
+					SAI->sigma = stdi;
 
-					printf("PSNR RGB median:%f\tPSNR RGB weights:%f\t SAI->std: %f\n", psnr_med, psnr_w, SAI->stdd);
+					//printf("PSNR RGB median:%f\tPSNR RGB weights:%f\t SAI->std: %f\n", psnr_med, psnr_w, SAI->sigma);
 
 				}
 
-				/* we don't use LS weights but something derived on geometric distance in view array*/
-				getGeomWeight(SAI, LF);
-				/* merge color with prediction */
-				mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
-				/* hole filling for color*/
+				getGeomWeight(SAI);
+				mergeWarped_N(SAI, 3);
 				holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
-				psnr_w = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
+
+				double psnr_w = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
 
 				if (psnr_w < psnr_med) {
 					delete[](SAI->color);
 					SAI->color = tmp_m;
 					SAI->use_median = true;
-					SAI->stdd = 0.0;
+					SAI->sigma = 0.0;
 				}
 				else {
 					delete[](tmp_m);
@@ -499,17 +331,7 @@ int main(int argc, char** argv) {
 				SAI->seg_vp = nullptr;
 			}
 
-			/* clean */
-			for (int ij = 0; ij < SAI->n_references; ij++)
-			{
-				delete[](warped_color_views[ij]);
-				delete[](warped_depth_views[ij]);
-				delete[](DispTargs[ij]);
-			}
-
-			delete[](warped_color_views);
-			delete[](warped_depth_views);
-			delete[](DispTargs);
+			deinitializeWarpingArrays(SAI);
 
 			SAI->merge_psnr = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
 		}
@@ -522,11 +344,11 @@ int main(int argc, char** argv) {
 
 			int startt = clock();
 
-			getGlobalSparseFilter(SAI, SAI->original_color_view);
+			getGlobalSparseFilter(SAI);
+			applyGlobalSparseFilter(SAI);
 
 			//std::cout << "time elapsed in getGlobalSparseFilter()\t" << (float)( (int)clock() - startt ) / CLOCKS_PER_SEC << "\n";
 
-			applyGlobalSparseFilter(SAI);
 
 			SAI->sparse_psnr = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
 			
@@ -556,13 +378,15 @@ int main(int argc, char** argv) {
 	int n_bytes_prediction = 0;
 	int n_bytes_residual = 0;
 
-	n_bytes_prediction += static_cast<int>(fwrite(&n_views_total, sizeof(int), 1, output_LF_file) ) * sizeof(int);
+	int yuv_transform_s = global_params->YUV_TRANSFORM ? 1 : 0;
+
+	n_bytes_prediction += static_cast<int>(fwrite(&global_params->n_views_total, sizeof(int), 1, output_LF_file) ) * sizeof(int);
 	n_bytes_prediction += static_cast<int>(fwrite(&LF->nr, sizeof(int), 1, output_LF_file)) * sizeof(int); // needed only once per LF
 	n_bytes_prediction += static_cast<int>(fwrite(&LF->nc, sizeof(int), 1, output_LF_file)) * sizeof(int); // 
 	n_bytes_prediction += static_cast<int>(fwrite(&yuv_transform_s, sizeof(int), 1, output_LF_file)) * sizeof(int);
-	n_bytes_prediction += static_cast<int>(fwrite(&MINIMUM_DEPTH, sizeof(unsigned short), 1, output_LF_file)) * sizeof(unsigned short);
+	n_bytes_prediction += static_cast<int>(fwrite(&LF->min_inv_d, sizeof(unsigned short), 1, output_LF_file)) * sizeof(unsigned short);
 
-	for (int ii = 0; ii < n_views_total; ii++) {
+	for (int ii = 0; ii < global_params->n_views_total; ii++) {
 
 		view *SAI = LF + ii;
 
@@ -575,7 +399,7 @@ int main(int argc, char** argv) {
 
 		if (SAI->residual_rate_color > 0) {
 
-			if (SAI->yuv_transform && YUV_TRANSFORM) {
+			if (SAI->yuv_transform && global_params->YUV_TRANSFORM) {
 
 				int ncomp_r = SAI->has_chrominance ? 3 : 1;
 
@@ -604,13 +428,13 @@ int main(int argc, char** argv) {
 
 	fclose(output_LF_file);
 
-	double num_pixels = n_views_total * LF->nr * LF->nc;
+	double num_pixels = global_params->n_views_total * LF->nr * LF->nc;
 
 	long enc_file_size = aux_GetFileSize(path_out_LF_data);
 
 	printf("Output: %s\nsize: %d kB\t bpp: %2.4f\n", path_out_LF_data, enc_file_size/1000, static_cast<double>( enc_file_size )/num_pixels);
 
-	for (int ii = 0; ii < n_views_total; ii++)
+	for (int ii = 0; ii < global_params->n_views_total; ii++)
 	{
 
 		cleanView(LF + ii);

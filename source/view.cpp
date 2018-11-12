@@ -40,7 +40,7 @@ void initView(view* view)
 
 	view->i_order = 0;
 
-	view->stdd = 0.0;
+	view->sigma = 0.0;
 
 	view->use_median = false;
 
@@ -71,6 +71,56 @@ void initView(view* view)
 	view->yuv_ratio_search = false;
 
 	view->original_color_view = nullptr;
+
+	view->warped_color_views = nullptr;
+	view->warped_depth_views = nullptr;
+	view->occlusion_masks = nullptr;
+
+	view->color_reference_views = nullptr; // parents
+	view->depth_reference_views = nullptr;
+
+}
+
+void setViewFilePaths(view* SAI, const char *output_dir, const char *input_dir) {
+
+	sprintf(SAI->output_dir, "%s", output_dir);
+	sprintf(SAI->input_dir, "%s", input_dir);
+
+	sprintf(SAI->path_input_ppm, "%s%c%03d_%03d%s", SAI->input_dir, '/', SAI->c, SAI->r, ".ppm");
+	sprintf(SAI->path_input_pgm, "%s%c%03d_%03d%s", SAI->input_dir, '/', SAI->c, SAI->r, ".pgm");
+	sprintf(SAI->path_input_seg, "%s%c%03d_%03d%s", SAI->input_dir, '/', SAI->c, SAI->r, "_segmentation.pgm");
+
+	sprintf(SAI->path_out_ppm, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, ".ppm");
+	sprintf(SAI->path_out_pgm, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, ".pgm");
+	sprintf(SAI->path_label_im, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_im_labels.int32");
+}
+
+void initializeWarpingArrays(view* SAI) {
+
+	/* holds partial warped views for ii */
+	SAI->warped_color_views = new unsigned short*[SAI->n_references]();
+	SAI->warped_depth_views = new unsigned short*[SAI->n_references]();
+	SAI->occlusion_masks = new float*[SAI->n_references]();
+
+	for (int ij = 0; ij < SAI->n_references; ij++) {
+		SAI->warped_color_views[ij] = new unsigned short[SAI->nr*SAI->nc * 3]();
+		SAI->warped_depth_views[ij] = new unsigned short[SAI->nr*SAI->nc]();
+		SAI->occlusion_masks[ij] = new float[SAI->nr*SAI->nc]();
+	}
+
+}
+
+void deinitializeWarpingArrays(view* SAI) {
+	for (int ij = 0; ij < SAI->n_references; ij++)
+	{
+		delete[](SAI->warped_color_views[ij]);
+		delete[](SAI->warped_depth_views[ij]);
+		delete[](SAI->occlusion_masks[ij]);
+	}
+
+	delete[](SAI->warped_color_views);
+	delete[](SAI->warped_depth_views);
+	delete[](SAI->occlusion_masks);
 }
 
 bool loadOriginalColor(view* SAI) {
@@ -138,6 +188,39 @@ void unloadInverseDepth(view* SAI) {
 	}
 }
 
+int getNB(view *SAI) {
+	/* returns the number of elements in the binary occlusion mask matrix */
+	return (1 << SAI->n_references)*SAI->n_references;
+}
+
+void setBMask(view *SAI)
+{
+
+	/* sets the binary mask used to derive view availability in each of the MMM classes,
+	size of the binary mask is [MMM x n_references] */
+
+	int MMM = 1 << SAI->n_references;
+
+	bool *bmask = new bool[MMM * SAI->n_references]();
+
+	SAI->bmask = bmask;
+
+	for (int ij = 0; ij < MMM; ij++) {
+
+		int uu = ij;
+
+		for (int ik = SAI->n_references - 1; ik >= 0; ik--) {
+
+			if ( uu / (1 << ik) > 0)
+			{
+				uu = uu - (1 << ik);
+				bmask[ij + ik * MMM] = 1;
+			}
+
+		}
+	}
+}
+
 int32_t *loadWarpedLabelIm(view *SAI, view *ref_view) {
 
 	int32_t *warpedLabelIm = new int32_t[SAI->nr*SAI->nc]();
@@ -150,6 +233,8 @@ int32_t *loadWarpedLabelIm(view *SAI, view *ref_view) {
 	tmpfile_im_warped_labels = fopen(warped_label_path, "rb");
 	fread(warpedLabelIm, sizeof(int), SAI->nr*SAI->nc, tmpfile_im_warped_labels);
 	fclose(tmpfile_im_warped_labels);
+
+	return warpedLabelIm;
 
 }
 

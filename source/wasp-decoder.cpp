@@ -142,7 +142,7 @@ int main(int argc, char** argv) {
 
 			/* Bug fix from VM1.0. The logic for choosing median merging over fixed weight merging was faulty. */
 			if (!SAI->use_median) {
-				if (SAI->stdd < 0.001) {
+				if (SAI->sigma < 0.001) {
 					/* merge color with prediction */
 					mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
 					/* hole filling for color*/

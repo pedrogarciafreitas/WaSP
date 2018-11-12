@@ -3,15 +3,17 @@
 
 #include "view.hh"
 
-void setBMask(view *view0);
+void initSegVp(view *view0);
+void initViewW(view *view0);
+void initMergingWeightArrays(view *view0);
+void deinitMergingWeightArrays(view *view0);
 
-void getViewMergingLSWeights_N(view *view0, unsigned short **warpedColorViews, float **DispTargs, const unsigned short *original_color_view);
+void getViewMergingLSWeights_N(view *view0);
 
-void initSegVp(view *view0, float **DispTargs);
-void initViewW(view *view0, float **DispTargs);
+void getGeomWeight(view *view0);
+void mergeMedian_N(view *view0, const int ncomponents);
+void mergeWarped_N(view *view0, const int ncomponents);
 
-void getGeomWeight(view *view0, view *LF);
-void mergeMedian_N(unsigned short **warpedColorViews, float **DispTargs, view *view0, const int ncomponents);
-void mergeWarped_N(unsigned short **warpedColorViews, float **DispTargs, view *view0, const int ncomponents);
+void columnwise_collecting_of_thetas(view *view0, double *thetas);
 
 #endif

@@ -3,7 +3,8 @@
 
 #include "view.hh"
 
-void predictDepth(view* SAI, view *LF);
+#define MEDFILT_DEPTH false
 
+void predictDepth(view* SAI, view *LF);
 
 #endif

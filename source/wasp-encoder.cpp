@@ -70,6 +70,8 @@ int main(int argc, char** argv) {
 		(LF+ii)->nr = LF->nr;
 		(LF+ii)->nc = LF->nc;
 	}
+
+	global_params->n_views_total = 2;
 	
 	/* predict and get residual for INVERSE DEPTH at all views */
 	for (int ii = 0; ii < global_params->n_views_total; ii++) {
@@ -175,68 +177,70 @@ int main(int argc, char** argv) {
 	}
 
 	/* warp labeling for all views with parents.*/
-	for (int ii = 0; ii < global_params->n_views_total; ii++) {
+	if (0) {
+		for (int ii = 0; ii < global_params->n_views_total; ii++) {
 
-		view *SAI = LF + ii;
+			view *SAI = LF + ii;
 
-		if (SAI->n_references > 0) {
+			if (SAI->n_references > 0) {
 
-			printf("Warping segmentation from parents (reference views) at view %03d_%03d\t", SAI->c, SAI->r);
+				printf("Warping segmentation from parents (reference views) at view %03d_%03d\t", SAI->c, SAI->r);
 
-			for (int ij = 0; ij < SAI->n_references; ij++) {
+				for (int ij = 0; ij < SAI->n_references; ij++) {
 
-				printf("%d ", ij);
+					printf("%d ", ij);
 
-				view *ref_view = LF + SAI->references[ij];
+					view *ref_view = LF + SAI->references[ij];
 
-				float y0 = ref_view->y;
-				float x0 = ref_view->x;
+					float y0 = ref_view->y;
+					float x0 = ref_view->x;
 
-				float y1 = SAI->y;
-				float x1 = SAI->x;
+					float y1 = SAI->y;
+					float x1 = SAI->x;
 
-				loadInverseDepth(ref_view);
+					loadInverseDepth(ref_view);
 
-				float *inverse_depth_view0 = new float[SAI->nr*SAI->nc]();
-				for (int ijk = 0; ijk < SAI->nr*SAI->nc; ijk++) {
-					*(inverse_depth_view0 + ijk) = static_cast<float>(ref_view->depth[ijk]);
-					*(inverse_depth_view0 + ijk) = *(inverse_depth_view0 + ijk) - static_cast<float>(SAI->min_inv_d);
-					*(inverse_depth_view0 + ijk) = *(inverse_depth_view0 + ijk) / static_cast<float>(1 << D_DEPTH);
+					float *inverse_depth_view0 = new float[SAI->nr*SAI->nc]();
+					for (int ijk = 0; ijk < SAI->nr*SAI->nc; ijk++) {
+						*(inverse_depth_view0 + ijk) = static_cast<float>(ref_view->depth[ijk]);
+						*(inverse_depth_view0 + ijk) = *(inverse_depth_view0 + ijk) - static_cast<float>(SAI->min_inv_d);
+						*(inverse_depth_view0 + ijk) = *(inverse_depth_view0 + ijk) / static_cast<float>(1 << D_DEPTH);
+					}
+
+					unloadInverseDepth(ref_view);
+
+					float *DM_COL = new float[SAI->nr*SAI->nc]();
+					float *DM_ROW = new float[SAI->nr*SAI->nc]();
+
+					getDisparity(y0, y1, x0, x1, inverse_depth_view0, ref_view->nr, ref_view->nc, DM_COL, DM_ROW);
+
+					loadLabels(ref_view);
+
+					int32_t *warpedLabels = new int32_t[SAI->nr*SAI->nc]();
+					float *warped_inverse_depth = new float[SAI->nr*SAI->nc]();
+
+					warp_0_to_1(DM_ROW, DM_COL, ref_view->label_im, SAI->nr, SAI->nc, 1, warpedLabels, warped_inverse_depth, inverse_depth_view0);
+
+					unloadLabels(ref_view);
+
+					writeWarpedLabelIm(SAI, ref_view, warpedLabels);
+
+					delete[](warped_inverse_depth);
+					delete[](warpedLabels);
+					delete[](inverse_depth_view0);
+
+					delete[](DM_COL);
+					delete[](DM_ROW);
+
+
+
 				}
 
-				unloadInverseDepth(ref_view);
-
-				float *DM_COL = new float[SAI->nr*SAI->nc]();
-				float *DM_ROW = new float[SAI->nr*SAI->nc]();
-
-				getDisparity(y0, y1, x0, x1, inverse_depth_view0, ref_view->nr, ref_view->nc, DM_COL, DM_ROW);
-
-				loadLabels(ref_view);
-
-				int32_t *warpedLabels = new int32_t[SAI->nr*SAI->nc]();
-				float *warped_inverse_depth = new float[SAI->nr*SAI->nc]();
-
-				warp_0_to_1(DM_ROW, DM_COL, ref_view->label_im, SAI->nr, SAI->nc, 1, warpedLabels, warped_inverse_depth, inverse_depth_view0);
-
-				unloadLabels(ref_view);
-
-				writeWarpedLabelIm(SAI, ref_view, warpedLabels);
-
-				delete[](warped_inverse_depth);
-				delete[](warpedLabels);
-				delete[](inverse_depth_view0);
-
-				delete[](DM_COL);
-				delete[](DM_ROW);
-
-				
+				printf("\n");
 
 			}
 
-			printf("\n");
-
 		}
-
 	}
 
 	/* predict in default mode (VM1.0,VM1.1) and obtain residual for COLOR at all views */
@@ -278,10 +282,8 @@ int main(int argc, char** argv) {
 
 				double psnr_med = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, 10);
 
-				unsigned short *tmp_m = new unsigned short[SAI->nr*SAI->nc*3]();
+				unsigned short *tmp_m = new unsigned short[SAI->nr*SAI->nc * 3]();
 				memcpy(tmp_m, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
-
-				
 
 				if (global_params->STD_SEARCH) {
 
@@ -334,24 +336,45 @@ int main(int argc, char** argv) {
 			deinitializeWarpingArrays(SAI);
 
 			SAI->merge_psnr = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
-		}
 
 
-		if (SAI->NNt > 0 && SAI->Ms > 0)
-		{
+			if (SAI->NNt > 0 && SAI->Ms > 0)
+			{
 
-			SAI->use_global_sparse = true;
+				SAI->use_global_sparse = true;
 
-			int startt = clock();
+				int startt = clock();
 
-			getGlobalSparseFilter(SAI);
-			applyGlobalSparseFilter(SAI);
+				getGlobalSparseFilter(SAI);
+				applyGlobalSparseFilter(SAI);
 
-			//std::cout << "time elapsed in getGlobalSparseFilter()\t" << (float)( (int)clock() - startt ) / CLOCKS_PER_SEC << "\n";
+				//std::cout << "time elapsed in getGlobalSparseFilter()\t" << (float)( (int)clock() - startt ) / CLOCKS_PER_SEC << "\n";
 
+				SAI->sparse_psnr = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
 
-			SAI->sparse_psnr = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
-			
+				loadLabels(SAI);
+
+				std::vector<std::pair<int, int>> regs_sz_desc = sortRegionsBySize(SAI);
+
+				for (int iregion = 0; iregion < regs_sz_desc.size(); iregion++) {
+
+					region_sparse_filter reg_sp = getSparseFilterForOneRegion(SAI, regs_sz_desc.at(iregion).second );
+
+					unsigned short *result_img = applySparseFilterForOneRegion(SAI, reg_sp);
+
+					memcpy(SAI->color, result_img, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+
+					delete[](result_img);
+
+					double region_psnr = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
+
+					printf("iregion: %i\tPSNR: %2.3f\n", regs_sz_desc.at(iregion).second, region_psnr);
+
+				}
+
+				unloadLabels(SAI);
+			}
+
 		}
 
 		get_and_write_color_residual_JP2(SAI, kdu_compress_path, kdu_expand_path );

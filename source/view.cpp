@@ -2,8 +2,6 @@
 #include "ppm.hh"
 #include <cstdio>
 
-#define nullptr 0
-
 void initView(view* view)
 {
 

@@ -2,8 +2,13 @@
 #define VIEW_HH
 
 #include <stdint.h>
+#include <vector>
 
-#define MEDFILT_DEPTH false
+struct region_sparse_filter {
+	int32_t region_indx;
+	std::vector< unsigned char > regressor_indices;
+	std::vector< int32_t > prediction_coefficients;
+};
 
 struct view{
 
@@ -116,6 +121,8 @@ struct view{
 
 	view **color_reference_views; // parents
 	view **depth_reference_views;
+
+	std::vector<region_sparse_filter> region_sparse_filters;
 
 };
 

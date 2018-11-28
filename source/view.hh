@@ -6,6 +6,8 @@
 
 struct region_sparse_filter {
 	int32_t region_indx;
+	int32_t Ms;
+	int32_t NNt;
 	std::vector< unsigned char > regressor_indices;
 	std::vector< int32_t > prediction_coefficients;
 };

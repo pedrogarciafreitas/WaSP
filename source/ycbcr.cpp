@@ -3,7 +3,7 @@
 
 #include <cstring>
 
-void RGB2YUV422(unsigned short *rgb, unsigned short **yy, unsigned short **cbb, unsigned short **crr,
+void RGB2YUV422(const unsigned short *rgb, unsigned short **yy, unsigned short **cbb, unsigned short **crr,
 	const int NR, const int NC, const int NCOMP, const int N) 
 {
 
@@ -34,7 +34,7 @@ void RGB2YUV422(unsigned short *rgb, unsigned short **yy, unsigned short **cbb, 
 }
 
 
-void RGB2YCbCr(unsigned short *rgb, unsigned short *ycbcr, const int nr, const int nc,const int N) 
+void RGB2YCbCr(const unsigned short *rgb, unsigned short *ycbcr, const int nr, const int nc,const int N)
 {
 
 	/* N-bit RGB 444 -> YCbCr 444 conversion */
@@ -83,7 +83,7 @@ void RGB2YCbCr(unsigned short *rgb, unsigned short *ycbcr, const int nr, const i
 
 }
 
-void YCbCr2RGB(unsigned short *ycbcr, unsigned short *rgb, const int nr, const int nc, const int N)
+void YCbCr2RGB(const unsigned short *ycbcr, unsigned short *rgb, const int nr, const int nc, const int N)
 {
 
 	double M[] = {		1.000000000000000,		1.000000000000000,				1.000000000000000,

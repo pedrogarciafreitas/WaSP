@@ -112,8 +112,8 @@ int checkBoundaryPixels(const int32_t *label_im, int offset, const int region_in
 
 unsigned short *applySparseFilterForOneRegion(view *view0, region_sparse_filter reg_sp) {
 
-	int NNt = view0->NNt;
-	int Ms = view0->Ms;
+	int NNt = reg_sp.NNt;
+	int Ms = reg_sp.Ms;
 
 	int nr = view0->nr;
 	int nc = view0->nc;
@@ -206,12 +206,12 @@ unsigned short *applySparseFilterForOneRegion(view *view0, region_sparse_filter 
 	return output_image;
 }
 
-region_sparse_filter getSparseFilterForOneRegion(view *view0, const int region_indx) {
+region_sparse_filter getSparseFilterForOneRegion(view *view0, const int region_indx, const int Ms, const int NNt) {
 
 	int nr = view0->nr;
 	int nc = view0->nc;
-	int NNt = view0->NNt;
-	int Ms = view0->Ms;
+	//int NNt = view0->NNt;
+	//int Ms = view0->Ms;
 
 	std::vector< int32_t > inds;
 	for (int ikj = 0; ikj < nr*nc; ikj++) {
@@ -287,6 +287,8 @@ region_sparse_filter getSparseFilterForOneRegion(view *view0, const int region_i
 	region_sparse_filter reg_sp;
 
 	reg_sp.region_indx = region_indx;
+	reg_sp.Ms = Ms;
+	reg_sp.NNt = NNt;
 	reg_sp.prediction_coefficients = PredTheta;
 	reg_sp.regressor_indices = PredRegr;
 

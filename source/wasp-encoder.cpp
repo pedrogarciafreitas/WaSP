@@ -24,6 +24,7 @@
 #include "kmeans.hh"
 #include "connected_components.hh"
 #include "configLoader.hh"
+#include "segmentation.hh"
 
 #define USE_difftest_ng false
 
@@ -56,7 +57,7 @@ int main(int argc, char** argv) {
 	}
 
 	/* to get effiency from multiple JP2 files, we remove parts of the files
-	which are repetative over all files. For this we have a minimalistic 
+	which are repetative over all files. For this we have a minimalistic
 	dictionary method. */
 	std::vector<std::vector<unsigned char>> JP2_dict;
 
@@ -67,12 +68,12 @@ int main(int argc, char** argv) {
 	delete[](original_color_view);
 
 	for (int ii = 0; ii < global_params->n_views_total; ii++) {
-		(LF+ii)->nr = LF->nr;
-		(LF+ii)->nc = LF->nc;
+		(LF + ii)->nr = LF->nr;
+		(LF + ii)->nc = LF->nc;
 	}
 
 	global_params->n_views_total = 2;
-	
+
 	/* predict and get residual for INVERSE DEPTH at all views */
 	for (int ii = 0; ii < global_params->n_views_total; ii++) {
 
@@ -129,50 +130,7 @@ int main(int argc, char** argv) {
 
 		view *SAI = LF + ii;
 
-		loadInverseDepth(SAI);
-
-		printf("Obtaining segmentation based on inverse depth at view %03d_%03d\t", SAI->c, SAI->r);
-
-		int *tmp_d = new int[SAI->nr*SAI->nc]();
-		for (int iii = 0; iii < SAI->nr*SAI->nc; iii++) {
-			*(tmp_d + iii) = static_cast<int>(*(SAI->depth + iii));
-		}
-
-		getKmeansQuantized(K_MEANS_CLUSTERS, tmp_d, SAI->nr*SAI->nc, K_MEANS_ITERATIONS); /*inplace assignment to tmp_d*/																				  
-
-		int nregions = 0;
-		int *reg_histogram = 0;
-		int32_t *label_im = get_labels(tmp_d, SAI->nr, SAI->nc, nregions, reg_histogram);
-
-		SAI->label_im = label_im;
-		SAI->nregions = nregions;
-		SAI->reg_histogram = reg_histogram;
-
-		unsigned short *labels = new unsigned short[SAI->nr*SAI->nc]();
-		for (int ii = 0; ii < SAI->nr*SAI->nc; ii++) {
-			*(labels + ii) = static_cast<unsigned short>(  *(label_im + ii) );
-		}
-
-		char labels_file[1024];
-		sprintf(labels_file, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_labels.pgm");
-		aux_write16PGMPPM(labels_file, SAI->nc, SAI->nr, 1, labels);
-
-		char tmp_d_file[1024];
-		sprintf(tmp_d_file, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_kmeans_disparity.int32");
-		FILE *tmpfile_d;
-		tmpfile_d = fopen(tmp_d_file, "wb");
-		fwrite(tmp_d, sizeof(int), SAI->nr*SAI->nc, tmpfile_d);
-		fclose(tmpfile_d);
-
-		delete[](tmp_d);
-		
-		FILE *tmpfile_im_labels;
-		tmpfile_im_labels = fopen(SAI->path_label_im, "wb");
-		fwrite(SAI->label_im, sizeof(int), SAI->nr*SAI->nc, tmpfile_im_labels);
-		fclose(tmpfile_im_labels);
-
-		unloadLabels(SAI);
-		unloadInverseDepth(SAI);
+		makeKMeansSegmentation(SAI, 16, 20);
 
 	}
 
@@ -248,7 +206,7 @@ int main(int argc, char** argv) {
 
 		view *SAI = LF + ii;
 
-		printf("Predicting color view %03d_%03d\t", SAI->c, SAI->r);
+		printf("Predicting color view %03d_%03d\n", SAI->c, SAI->r);
 
 		loadOriginalColor(SAI);
 
@@ -337,6 +295,10 @@ int main(int argc, char** argv) {
 
 			SAI->merge_psnr = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
 
+			unsigned short *tmp_imm00 = new unsigned short[SAI->nr*SAI->nc * 3]();
+			memcpy(tmp_imm00, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+
+			float rate_color_0 = SAI->residual_rate_color;
 
 			if (SAI->NNt > 0 && SAI->Ms > 0)
 			{
@@ -352,37 +314,82 @@ int main(int argc, char** argv) {
 
 				SAI->sparse_psnr = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
 
-				loadLabels(SAI);
+				std::vector<double> psnrs_sp_reg;
+				std::vector<float> rates_sp_reg;
+				std::vector<int> kmeans_clusters_n;
+				std::vector<int> nregions_sp;
 
-				std::vector<std::pair<int, int>> regs_sz_desc = sortRegionsBySize(SAI);
+				for (int kmeans_clusters = 2; kmeans_clusters < 32; kmeans_clusters += 4) {
 
-				for (int iregion = 0; iregion < regs_sz_desc.size(); iregion++) {
+					makeKMeansSegmentation(SAI, kmeans_clusters, 20);
 
-					region_sparse_filter reg_sp = getSparseFilterForOneRegion(SAI, regs_sz_desc.at(iregion).second );
+					std::vector<std::pair<int, int>> regs_sz_desc = sortRegionsBySize(SAI);
 
-					unsigned short *result_img = applySparseFilterForOneRegion(SAI, reg_sp);
+					loadLabels(SAI);
 
-					memcpy(SAI->color, result_img, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+					SAI->region_sparse_filters.clear();
 
-					delete[](result_img);
+					memcpy(SAI->color, tmp_imm00, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
 
-					double region_psnr = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
+					for (int iregion = 0; iregion < 100; iregion++) {
 
-					printf("iregion: %i\tPSNR: %2.3f\n", regs_sz_desc.at(iregion).second, region_psnr);
+						SAI->region_sparse_filters.push_back( getSparseFilterForOneRegion(SAI, regs_sz_desc.at(iregion).second, 3, 1) );
 
+					}
+
+					for (int iregion = 0; iregion < SAI->region_sparse_filters.size(); iregion++) {
+
+						unsigned short *result_img = applySparseFilterForOneRegion( SAI, SAI->region_sparse_filters.at(iregion) );
+
+						memcpy(SAI->color, result_img, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+						delete[](result_img);
+
+						if (iregion % 10 == 0) {
+
+							SAI->residual_rate_color = rate_color_0;
+
+							for (int ikr = 0; ikr <= iregion; ikr++) {
+								SAI->residual_rate_color -=
+									static_cast<float>(SAI->region_sparse_filters.at(iregion).Ms*32 + 64) /
+									static_cast<float>(SAI->nr) / static_cast<float>(SAI->nc);
+							}
+
+							unsigned short *tmp_imm1 = new unsigned short[SAI->nr*SAI->nc * 3]();
+							memcpy(tmp_imm1, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+
+							get_and_write_color_residual_JP2(SAI, kdu_compress_path, kdu_expand_path);
+
+							psnrs_sp_reg.push_back(getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH));
+							rates_sp_reg.push_back(SAI->residual_rate_color);
+							kmeans_clusters_n.push_back(kmeans_clusters);
+							nregions_sp.push_back(iregion+1);
+
+							memcpy(SAI->color, tmp_imm1, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+							delete[](tmp_imm1);
+
+							printf("region idx: %5d\trate[bpp]: %2.5f\tPSNR: %2.3f\n",
+								regs_sz_desc.at(iregion).second,
+								SAI->residual_rate_color,
+								psnrs_sp_reg.at(psnrs_sp_reg.size() - 1));
+						}
+
+					}
+					unloadLabels(SAI);
 				}
-
-				unloadLabels(SAI);
 			}
+
+			SAI->residual_rate_color = rate_color_0;
+
+			memcpy(SAI->color, tmp_imm00, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+			delete[](tmp_imm00);
 
 		}
 
-		get_and_write_color_residual_JP2(SAI, kdu_compress_path, kdu_expand_path );
+		get_and_write_color_residual_JP2(SAI, kdu_compress_path, kdu_expand_path);
+		SAI->final_psnr = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
 
 		aux_write16PGMPPM(SAI->path_out_ppm, SAI->nc, SAI->nr, 3, SAI->color);
 
-		SAI->final_psnr = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
-		
 		/* to reduce memory usage */
 		unloadColor(SAI);
 		unloadOriginalColor(SAI);
@@ -403,7 +410,7 @@ int main(int argc, char** argv) {
 
 	int yuv_transform_s = global_params->YUV_TRANSFORM ? 1 : 0;
 
-	n_bytes_prediction += static_cast<int>(fwrite(&global_params->n_views_total, sizeof(int), 1, output_LF_file) ) * sizeof(int);
+	n_bytes_prediction += static_cast<int>(fwrite(&global_params->n_views_total, sizeof(int), 1, output_LF_file)) * sizeof(int);
 	n_bytes_prediction += static_cast<int>(fwrite(&LF->nr, sizeof(int), 1, output_LF_file)) * sizeof(int); // needed only once per LF
 	n_bytes_prediction += static_cast<int>(fwrite(&LF->nc, sizeof(int), 1, output_LF_file)) * sizeof(int); // 
 	n_bytes_prediction += static_cast<int>(fwrite(&yuv_transform_s, sizeof(int), 1, output_LF_file)) * sizeof(int);
@@ -455,7 +462,7 @@ int main(int argc, char** argv) {
 
 	long enc_file_size = aux_GetFileSize(path_out_LF_data);
 
-	printf("Output: %s\nsize: %d kB\t bpp: %2.4f\n", path_out_LF_data, enc_file_size/1000, static_cast<double>( enc_file_size )/num_pixels);
+	printf("Output: %s\nsize: %d kB\t bpp: %2.4f\n", path_out_LF_data, enc_file_size / 1000, static_cast<double>(enc_file_size) / num_pixels);
 
 	for (int ii = 0; ii < global_params->n_views_total; ii++)
 	{

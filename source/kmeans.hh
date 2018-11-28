@@ -1,16 +1,19 @@
 #ifndef KMEANS_HH
 #define KMEANS_HH
 
-#define K_MEANS_CLUSTERS 16
-#define K_MEANS_ITERATIONS 16
-
 void updateValues(const int K_clusters, double *centroids, double *dvalues, int *quantized, const int npoints);
 void assignClusters( const int K_clusters, double *centroids, double *dvalues, int *quantized, const int npoints );
 bool updateClusters( const int K_clusters, double *centroids, double *dvalues, int *quantized, const int npoints );
+
 //void getKmeansQuantized( const int K_clusters, int *values, int npoints, const int iterations );
 
 template <class T>
-void getKmeansQuantized(const int K_clusters, T *values, const int npoints, const int iterations) {
+int *getKmeansQuantized(const int K_clusters, const T *in_values, const int npoints, const int iterations) {
+
+	int *values = new int[npoints]();
+	for (int iii = 0; iii < npoints; iii++) {
+		*(values + iii) = static_cast<int>(*(in_values + iii));
+	}
 
 	double min_value = DBL_MAX;
 	double max_value = -DBL_MAX;
@@ -49,14 +52,18 @@ void getKmeansQuantized(const int K_clusters, T *values, const int npoints, cons
 
 	updateValues(K_clusters, centroids, dvalues, quantized, npoints);
 
+	int *out_values = new int[npoints]();
+
 	for (int ii = 0; ii < npoints; ii++) {
-		values[ii] = static_cast<T>(dvalues[ii]);
+		out_values[ii] = static_cast<int>( dvalues[ii] );
 		//values[ii] = static_cast<T>(floor(dvalues[ii] + 0.5));
 	}
 
 	delete[](dvalues);
 	delete[](centroids);
 	delete[](quantized);
+
+	return out_values;
 }
 
 #endif

@@ -50,7 +50,8 @@ void getViewMergingLSWeights_N(view *view0)
 
 		for (int ik = 0; ik < n_references; ik++){ // reference view
 
-			if (bmask[ij + ik * MMM]){
+			if (bmask[ij + ik * MMM])
+			{
 
 				/* allocate pixels for region */
 				reference_view_pixels_in_classes[ij + ik * MMM] = new unsigned short[NN * 3]();
@@ -90,7 +91,10 @@ void getViewMergingLSWeights_N(view *view0)
 		for (int ik = 0; ik<n_references; ik++)
 		{
 			if (bmask[ij + MMM * ik])
+			//if (( (ij - 1) >> ik) & 1)
+			{
 				M++;
+			}
 		}
 
 		int N = number_of_pixels_per_region[ij]; // number of rows in A

@@ -97,11 +97,13 @@ struct view{
 
 	char pgm_residual_depth_path[1024];
 	char jp2_residual_depth_path_jp2[1024];
+	char raw_depth_path[1024];
 
 	double final_psnr;
 	double warp_psnr;
 	double merge_psnr;
 	double sparse_psnr;
+	double inverse_depth_psnr;
 
 	int ncomp;
 
@@ -128,8 +130,11 @@ struct view{
 
 };
 
-void initializeWarpingArrays(view *SAI);
-void deinitializeWarpingArrays(view *SAI);
+void initializeWarpingArraysTexture(view *SAI);
+void deinitializeWarpingArraysTexture(view *SAI);
+
+void initializeWarpingArraysInverseDepth(view *SAI);
+void deinitializeWarpingArraysInverseDepth(view *SAI);
 
 void setViewFilePaths(view* SAI, const char *output_dir, const char *input_dir);
 
@@ -153,5 +158,7 @@ int32_t *loadWarpedLabelIm(view *SAI, view *ref_view);
 bool writeWarpedLabelIm(view *SAI, view *ref_view, const int32_t *warpedLabelIm);
 
 void cleanView(view *SAI);
+
+void writeResultsFile(const char *output_dir,const view *LF, const int nviews);
 
 #endif

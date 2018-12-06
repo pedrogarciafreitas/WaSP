@@ -6,7 +6,7 @@
 #include "warping.hh"
 #include "bitdepth.hh"
 
-#define SAVE_PARTIAL_WARPED_VIEWS false
+#define SAVE_PARTIAL_WARPED_VIEWS true
 
 void getDisparity(const float y0, const float y1, const float x0, const float x1, float *inverse_depth_view_0, const int nr, const int nc,
 	float *DM_COL, float *DM_ROW) {
@@ -35,7 +35,7 @@ void warp_all_references_to_current_view(view *SAI) {
 		loadInverseDepth(ref_view);
 
 		/* FORWARD warp color AND depth */
-		warpView0_to_View1(ref_view, SAI, 3, ij);
+		warpView0_to_View1(ref_view, SAI, 3, ij,1);
 
 		unloadColor(ref_view);
 		unloadInverseDepth(ref_view);
@@ -50,12 +50,18 @@ void warp_all_references_to_current_view(view *SAI) {
 			sprintf(tmp_str, "%s/%03d_%03d%s%03d_%03d%s", SAI->output_dir, (ref_view)->c, (ref_view)->r, "_warped_to_", SAI->c, SAI->r, ".pgm");
 			aux_write16PGMPPM(tmp_str, SAI->nc, SAI->nr, 1, SAI->warped_depth_views[ij]);
 
+			/*sprintf(tmp_str, "%s/%03.3f_%03.3f%s%03.3f_%03.3f%s", SAI->output_dir, (ref_view)->x, (ref_view)->y, "_warped_to_", SAI->x, SAI->y, ".ppm");
+			aux_write16PGMPPM(tmp_str, SAI->nc, SAI->nr, 3, SAI->warped_color_views[ij]);
+
+			sprintf(tmp_str, "%s/%03.3f_%03.3f%s%03.3f_%03.3f%s", SAI->output_dir, (ref_view)->x, (ref_view)->y, "_warped_to_", SAI->x, SAI->y, ".pgm");
+			aux_write16PGMPPM(tmp_str, SAI->nc, SAI->nr, 1, SAI->warped_depth_views[ij]);*/
+
 		}
 
 	}
 }
 
-void warpView0_to_View1(view *view0, view *view1, const int ncomp, const int ref_idx)
+void warpView0_to_View1(view *view0, view *view1, const int ncomp, const int ref_idx, const bool doTexture)
 {
 
 	/*this function forward warps from view0 to view1 for both color and depth*/
@@ -83,8 +89,8 @@ void warpView0_to_View1(view *view0, view *view1, const int ncomp, const int ref
 		int iy = ij % view0->nr; //row
 		int ix = (ij - iy) / view0->nr; //col
 
-		int ixnew = ix + (int)floor(DM_COL + 0.5);
-		int iynew = iy + (int)floor(DM_ROW + 0.5);
+		int ixnew = ix + static_cast<int>(DM_COL + 0.5f);
+		int iynew = iy + static_cast<int>(DM_ROW + 0.5f);
 
 		if (ixnew >= 0 && ixnew < view0->nc && iynew >= 0 && iynew < view0->nr) {
 			int indnew = iynew + ixnew*view0->nr;
@@ -94,8 +100,10 @@ void warpView0_to_View1(view *view0, view *view1, const int ncomp, const int ref
 				DispTarg[indnew] = disp;
 				warpedDepth[indnew] = DD1[ij];
 
-				for (int icomp = 0; icomp < ncomp; icomp++) {
-					warpedColor[indnew + view0->nr*view0->nc*icomp] = AA1[ij+view0->nr*view0->nc*icomp];
+				if (doTexture) {
+					for (int icomp = 0; icomp < ncomp; icomp++) {
+						warpedColor[indnew + view0->nr*view0->nc*icomp] = AA1[ij + view0->nr*view0->nc*icomp];
+					}
 				}
 				
 			}

@@ -388,6 +388,35 @@ void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_
 
 }
 
+std::string kakaduEncodeCall(const char *kdu_compress_path,const char *ppm_residual_path, const char *jp2_residual_path_jp2, const float residual_rate) {
+	char kdu_compress_s[1024];
+	sprintf(kdu_compress_s, "\"%s\"%s%s%s%s%s%f%s%d", kdu_compress_path, " -i ", ppm_residual_path, " -o ", jp2_residual_path_jp2, " -no_weights -full -no_info -precise -rate ", residual_rate,
+		" Clevels=", CLEVELS);
+	return std::string(kdu_compress_s);
+}
+
+std::string kakaduDecodeCall(const char *kdu_expand_path, const char *ppm_residual_path, const char *jp2_residual_path_jp2) {
+	char kdu_expand_s[1024];
+	sprintf(kdu_expand_s, "\"%s\"%s%s%s%s%s", kdu_expand_path, " -i ", jp2_residual_path_jp2, " -o ", ppm_residual_path, " -precise");
+	return std::string(kdu_expand_s);
+}
+
+void encodeInverseDepthJP2(const int nr, const int nc, unsigned short *ps, const char *ppm_residual_path,
+	const char *kdu_compress_path, const char *jp2_residual_path_jp2, const float residual_rate)
+{
+	aux_write16PGMPPM(ppm_residual_path, nc, nr, 1, ps);
+	int status = system_1(kakaduEncodeCall(kdu_compress_path, ppm_residual_path, jp2_residual_path_jp2, residual_rate));
+}
+
+void decodeInverseDepthJP2(unsigned short *ps, const char *kdu_expand_path, 
+	const char *jp2_residual_path_jp2, const char *output_file_path, 
+	const int nr, const int nc, const int ncomp) {
+
+	int status = system_1(kakaduDecodeCall(kdu_expand_path, output_file_path, jp2_residual_path_jp2));
+	//status = aux_read16PGMPPM(ppm_residual_path, nc1, nr1, ncomp1, ps);
+	status = auxReadRAW(output_file_path, nr, nc, ncomp, ps);
+}
+
 void encodeResidualJP2(const int nr, const int nc, unsigned short *original_intermediate_view, unsigned short *ps, const char *ppm_residual_path,
 	const char *kdu_compress_path, const char *jp2_residual_path_jp2, const float residual_rate, const int ncomp, const int offset, const bool RESIDUAL_16BIT_bool)
 {

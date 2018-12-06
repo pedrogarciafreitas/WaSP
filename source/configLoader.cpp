@@ -69,7 +69,7 @@ view* load_config_and_init_LF(const char *config_file) {
 
 		if (abs(yy) > 0) {
 			SAI->has_y_displacement = true;
-			SAI->y = -static_cast<float>(yy) / 100000;
+			SAI->y = -static_cast<float>(yy) / 100000; /* MINUS IS HERE !!!*/
 		}
 
 		int rate_color, rate_depth;

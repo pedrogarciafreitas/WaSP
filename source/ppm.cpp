@@ -47,7 +47,7 @@ bool aux_read16PGMPPM(const char* filename, int &width, int &height, int &ncomp,
 	Image16bit = new unsigned short[width*height * ncomp]();
 
 	/*--< Read 16bit ppm image from filept >--*/
-	int nread = (int)fread(Image16bit, sizeof(unsigned short), width*height * ncomp, filept);
+	int nread = static_cast<int>( fread(Image16bit, sizeof(unsigned short), width*height * ncomp, filept) );
 
 	if (nread != width*height * ncomp)
 	{

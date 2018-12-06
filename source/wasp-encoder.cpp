@@ -72,7 +72,7 @@ int main(int argc, char** argv) {
 		(LF + ii)->nc = LF->nc;
 	}
 
-	global_params->n_views_total = 2;
+	global_params->n_views_total = 10;
 
 	/* predict and get residual for INVERSE DEPTH at all views */
 	for (int ii = 0; ii < global_params->n_views_total; ii++) {
@@ -95,14 +95,24 @@ int main(int argc, char** argv) {
 
 		if (SAI->residual_rate_depth > 0 && SAI->depth_file_exist) { /* residual depth if needed */
 
+			sprintf(SAI->raw_depth_path, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_inverse_depth.raw");
+
 			sprintf(SAI->pgm_residual_depth_path, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_depth_residual.pgm");
 
 			sprintf(SAI->jp2_residual_depth_path_jp2, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_depth_residual.jp2");
 
-			encodeResidualJP2(SAI->nr, SAI->nc, original_depth_view, SAI->depth, SAI->pgm_residual_depth_path,
-				kdu_compress_path, SAI->jp2_residual_depth_path_jp2, SAI->residual_rate_depth, 1, 0, 1);
+			//encodeResidualJP2(SAI->nr, SAI->nc, original_depth_view, SAI->depth, SAI->pgm_residual_depth_path,
+				//kdu_compress_path, SAI->jp2_residual_depth_path_jp2, SAI->residual_rate_depth, 1, 0, 1);
 
-			decodeResidualJP2(SAI->depth, kdu_expand_path, SAI->jp2_residual_depth_path_jp2, SAI->pgm_residual_depth_path, ncomp1, 0, (1 << 16) - 1, 1);
+			//decodeResidualJP2(SAI->depth, kdu_expand_path, SAI->jp2_residual_depth_path_jp2, SAI->pgm_residual_depth_path, ncomp1, 0, (1 << 16) - 1, 1);
+
+			encodeInverseDepthJP2(SAI->nr, SAI->nc, original_depth_view, SAI->pgm_residual_depth_path,
+				kdu_compress_path, SAI->jp2_residual_depth_path_jp2, SAI->residual_rate_depth);
+
+			decodeInverseDepthJP2(SAI->depth, kdu_expand_path, SAI->jp2_residual_depth_path_jp2, 
+				SAI->raw_depth_path, SAI->nr, SAI->nc, 1);
+
+			SAI->inverse_depth_psnr = PSNR(SAI->depth, original_depth_view, SAI->nr, SAI->nc, 1);
 
 			SAI->has_depth_residual = true;
 		}
@@ -215,7 +225,7 @@ int main(int argc, char** argv) {
 		/* color prediction */
 		if (SAI->n_references > 0) {
 
-			initializeWarpingArrays(SAI);
+			initializeWarpingArraysTexture(SAI);
 
 			warp_all_references_to_current_view(SAI);
 
@@ -291,7 +301,7 @@ int main(int argc, char** argv) {
 				SAI->seg_vp = nullptr;
 			}
 
-			deinitializeWarpingArrays(SAI);
+			deinitializeWarpingArraysTexture(SAI);
 
 			SAI->merge_psnr = getYCbCr_422_PSNR(SAI->color, SAI->original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
 
@@ -394,8 +404,11 @@ int main(int argc, char** argv) {
 		unloadColor(SAI);
 		unloadOriginalColor(SAI);
 
-		printf("%2.3f\t%2.3f\t%2.3f\n", SAI->merge_psnr, SAI->sparse_psnr, SAI->final_psnr);
+		printf("%2.3f\t%2.3f\t%2.3f\t%2.3f\n", SAI->inverse_depth_psnr,SAI->merge_psnr, SAI->sparse_psnr, SAI->final_psnr);
 	}
+
+	/* write results.txt */
+	writeResultsFile(output_dir, LF, global_params->n_views_total);
 
 	/* write bitstream */
 	char path_out_LF_data[1024];

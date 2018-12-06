@@ -93,7 +93,7 @@ void setViewFilePaths(view* SAI, const char *output_dir, const char *input_dir) 
 	sprintf(SAI->path_label_im, "%s%c%03d_%03d%s", SAI->output_dir, '/', SAI->c, SAI->r, "_im_labels.int32");
 }
 
-void initializeWarpingArrays(view* SAI) {
+void initializeWarpingArraysTexture(view* SAI) {
 
 	/* holds partial warped views for ii */
 	SAI->warped_color_views = new unsigned short*[SAI->n_references]();
@@ -108,7 +108,35 @@ void initializeWarpingArrays(view* SAI) {
 
 }
 
-void deinitializeWarpingArrays(view* SAI) {
+void initializeWarpingArraysInverseDepth(view* SAI) {
+
+	/* holds partial warped views for ii */
+	SAI->warped_color_views = new unsigned short*[SAI->n_depth_references]();
+	SAI->warped_depth_views = new unsigned short*[SAI->n_depth_references]();
+	SAI->occlusion_masks = new float*[SAI->n_depth_references]();
+
+	for (int ij = 0; ij < SAI->n_depth_references; ij++) {
+		SAI->warped_color_views[ij] = new unsigned short[SAI->nr*SAI->nc * 3]();
+		SAI->warped_depth_views[ij] = new unsigned short[SAI->nr*SAI->nc]();
+		SAI->occlusion_masks[ij] = new float[SAI->nr*SAI->nc]();
+	}
+
+}
+
+void deinitializeWarpingArraysTexture(view* SAI) {
+	for (int ij = 0; ij < SAI->n_references; ij++)
+	{
+		delete[](SAI->warped_color_views[ij]);
+		delete[](SAI->warped_depth_views[ij]);
+		delete[](SAI->occlusion_masks[ij]);
+	}
+
+	delete[](SAI->warped_color_views);
+	delete[](SAI->warped_depth_views);
+	delete[](SAI->occlusion_masks);
+}
+
+void deinitializeWarpingArraysInverseDepth(view* SAI) {
 	for (int ij = 0; ij < SAI->n_references; ij++)
 	{
 		delete[](SAI->warped_color_views[ij]);
@@ -255,6 +283,24 @@ bool writeWarpedLabelIm(view *SAI, view *ref_view, const int32_t *warpedLabelIm)
 	}
 
 
+}
+
+void writeResultsFile(const char* output_dir, const view *LF, const int nviews) {
+	char path_results[1024];
+	sprintf(path_results, "%s%c%s", output_dir, '/', "results.txt");
+	FILE *results_file;
+	results_file = fopen(path_results, "wb");
+	fprintf(results_file, "row,col,psnr(inverse depth),psnr_yuv(merging),psnr_yuv(sparse),psnr_yuv(final)\n");
+	for (int ii = 0; ii < nviews; ii++) {
+		const view *SAI = LF + ii;
+		fprintf(results_file, "%03d\t%03d\t%2.3f\t%2.3f\t%2.3f\t%2.3f\n",
+			SAI->r, SAI->c,
+			SAI->inverse_depth_psnr,
+			SAI->merge_psnr,
+			SAI->sparse_psnr,
+			SAI->final_psnr);
+	}
+	fclose(results_file);
 }
 
 void cleanView(view *SAI) {

@@ -7,7 +7,7 @@
 
 void warp_all_references_to_current_view(view *SAI);
 
-void warpView0_to_View1(view *view0, view *view1, const int ncomp, const int ref_idx);
+void warpView0_to_View1(view *view0, view *view1, const int ncomp, const int ref_idx, const bool doTexture);
 
 void getDisparity(const float y0, const float y1, const float x1, const float x2, float *inverse_depth_view_0, const int nr, const int nc,
 	float *DM_COL, float *DM_ROW);

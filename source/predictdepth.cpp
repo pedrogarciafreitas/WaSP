@@ -13,7 +13,7 @@ void predictDepth(view* SAI, view *LF)
 	/* forward warp depth */
 	if (SAI->has_depth_references) {
 		/* currently we forward warp the depth from the N (for HDCA N = 5, lenslet maybe 1?) references */
-		initializeWarpingArrays(SAI);
+		initializeWarpingArraysInverseDepth(SAI);
 
 		for (int ij = 0; ij < SAI->n_depth_references; ij++)
 		{
@@ -22,9 +22,9 @@ void predictDepth(view* SAI, view *LF)
 			int tmp_w, tmp_r, tmp_ncomp;
 
 			aux_read16PGMPPM(ref_view->path_out_pgm, tmp_w, tmp_r, tmp_ncomp, ref_view->depth);
-			aux_read16PGMPPM(ref_view->path_out_ppm, tmp_w, tmp_r, tmp_ncomp, ref_view->color);
+			//aux_read16PGMPPM(ref_view->path_out_ppm, tmp_w, tmp_r, tmp_ncomp, ref_view->color);
 
-			warpView0_to_View1(ref_view, SAI, 1, ij);
+			warpView0_to_View1(ref_view, SAI, 1, ij,0);
 
 			delete[](ref_view->depth);
 			delete[](ref_view->color);
@@ -57,7 +57,7 @@ void predictDepth(view* SAI, view *LF)
 		/* hole filling for depth */
 		holefilling(SAI->depth, 1, SAI->nr, SAI->nc, 0);
 
-		deinitializeWarpingArrays(SAI);
+		deinitializeWarpingArraysInverseDepth(SAI);
 
 	}
 

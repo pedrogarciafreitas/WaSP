@@ -76,6 +76,8 @@ struct view{
 
 	bool has_chrominance;
 
+    uint32_t level;
+
 };
 
 void initView(view* view);

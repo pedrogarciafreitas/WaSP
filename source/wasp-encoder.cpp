@@ -187,6 +187,28 @@ int main(int argc, char** argv) {
 	}
 	fclose(filept);
 
+    /* Here we obtain the hierchical level of the view.
+    We obtain the level by inspecting which views are used as references for a given view.
+    Since only lower levels can be used as references, we can infer the level of the current view.*/
+    int *hierarchy_matrix = new int[maxR*maxC]();
+    for (int ii = 0; ii < n_views_total; ii++) {
+
+        view *SAI = (LF + ii);
+
+        /* here we collect the maximum level appearing in the set of references of SAI*/
+        int max_level = 0;
+
+        for (int jj = 0; jj < SAI->n_references; jj++) {
+            view *ref_SAI = (LF + SAI->references[jj]);
+            int hval = hierarchy_matrix[ref_SAI->r + maxR*ref_SAI->c];
+            max_level = hval > max_level ? hval : max_level;
+        }
+
+        hierarchy_matrix[SAI->r + maxR*SAI->c] = max_level + 1;
+        SAI->level = hierarchy_matrix[SAI->r + maxR*SAI->c];
+
+    }
+
 	char path_out_LF_data[1024];
 	sprintf(path_out_LF_data, "%s%c%s", output_dir, '/', "output.LF");
 
@@ -325,7 +347,15 @@ int main(int argc, char** argv) {
 				/* merge color with prediction */
 				mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
 				/* hole filling for color*/
-				holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+				//holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+                for (int32_t icomp = 0; icomp < 3; icomp++) {
+                    uint32_t nholes = holefilling(
+                        SAI->color + icomp*SAI->nr*SAI->nc,
+                        SAI->nr,
+                        SAI->nc,
+                        (uint16_t)0,
+                        SAI->seg_vp);
+                }
 			}
 			else {
 				/* get baseline with median, we then study whether weighting improves */
@@ -333,7 +363,17 @@ int main(int argc, char** argv) {
 				int startt = clock();
 				mergeMedian_N(warped_color_views, DispTargs, SAI, 3);
 				std::cout << "time elapsed in color median merging\t" << (float)( (int)clock() - startt ) / CLOCKS_PER_SEC << "\n";
-				holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+				//holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+
+                for (int32_t icomp = 0; icomp < 3; icomp++) {
+                    uint32_t nholes = holefilling(
+                        SAI->color + icomp*SAI->nr*SAI->nc,
+                        SAI->nr,
+                        SAI->nc,
+                        (uint16_t)0,
+                        SAI->seg_vp);
+                }
+
 
 				//double psnr_med = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, 10);
 				double psnr_med = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, 10);
@@ -354,7 +394,15 @@ int main(int argc, char** argv) {
 						/* merge color with prediction */
 						mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
 						/* hole filling for color*/
-						holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+						//holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+                        for (int32_t icomp = 0; icomp < 3; icomp++) {
+                            uint32_t nholes = holefilling(
+                                SAI->color + icomp*SAI->nr*SAI->nc,
+                                SAI->nr,
+                                SAI->nc,
+                                (uint16_t)0,
+                                SAI->seg_vp);
+                        }
 						double tpsnr = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
 						//double tpsnr = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, 10);
 
@@ -376,7 +424,15 @@ int main(int argc, char** argv) {
 				/* merge color with prediction */
 				mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
 				/* hole filling for color*/
-				holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+				//holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+                for (int32_t icomp = 0; icomp < 3; icomp++) {
+                    uint32_t nholes = holefilling(
+                        SAI->color + icomp*SAI->nr*SAI->nc,
+                        SAI->nr,
+                        SAI->nc,
+                        (uint16_t)0,
+                        SAI->seg_vp);
+                }
 				psnr_w = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
 
 				if (psnr_w < psnr_med) {
@@ -467,6 +523,8 @@ int main(int argc, char** argv) {
 
 		char jp2_residual_path_jp2[1024];
 
+        char residual_path_hevc[1024];
+
 		char pgm_residual_Y_path[1024];
 		char jp2_residual_Y_path_jp2[1024];
 		char pgm_residual_Cb_path[1024];
@@ -501,6 +559,15 @@ int main(int argc, char** argv) {
 			sprintf(ppm_residual_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.ppm");
 			sprintf(jp2_residual_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.jp2");
 
+            sprintf(
+                residual_path_hevc, 
+                "%s%c%03d_%03d%s", 
+                output_dir,
+                '/', 
+                SAI->c,
+                SAI->r,
+                "_residual.hevc");
+
 			ycbcr_pgm_names[0] = pgm_residual_Y_path;
 			ycbcr_pgm_names[1] = pgm_residual_Cb_path;
 			ycbcr_pgm_names[2] = pgm_residual_Cr_path;
@@ -510,7 +577,7 @@ int main(int argc, char** argv) {
 			ycbcr_jp2_names[2] = jp2_residual_Cr_path_jp2;
 			
 
-			if (YUV_TRANSFORM) {
+			if (0){//(YUV_TRANSFORM) {
 
 				unsigned short *tmpim = new unsigned short[SAI->nr*SAI->nc * 3]();
 				memcpy(tmpim, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
@@ -607,11 +674,44 @@ int main(int argc, char** argv) {
 			else {
 
 				int offset_v = (1<<BIT_DEPTH) - 1;
+                int Q = 2;
 
-				encodeResidualJP2(SAI->nr, SAI->nc, original_color_view, SAI->color, ppm_residual_path,
-					kdu_compress_path, jp2_residual_path_jp2, SAI->residual_rate_color, 3, offset_v, RESIDUAL_16BIT_bool);
+                if (SAI->level < 2) {
+                    offset_v = 0;
+                    Q = 1;
+                }
 
-				decodeResidualJP2(SAI->color, kdu_expand_path, jp2_residual_path_jp2, ppm_residual_path, ncomp1, offset_v, offset_v, RESIDUAL_16BIT_bool);
+                encodeResidualHM(
+                    SAI->nr,
+                    SAI->nc, 
+                    original_color_view,
+                    SAI->color,
+                    ppm_residual_path,
+                	kdu_compress_path,
+                    residual_path_hevc,
+                    SAI->residual_rate_color,
+                    3, 
+                    offset_v,
+                    RESIDUAL_16BIT_bool,
+                    Q);
+
+                decodeResidualHM(
+                    SAI->nr,
+                    SAI->nc,
+                    SAI->color, 
+                    kdu_expand_path, 
+                    residual_path_hevc,
+                    ppm_residual_path, 
+                    ncomp1,
+                    offset_v, 
+                    (1 << BIT_DEPTH) - 1,
+                    RESIDUAL_16BIT_bool,
+                    Q);
+
+				//encodeResidualJP2(SAI->nr, SAI->nc, original_color_view, SAI->color, ppm_residual_path,
+				//	kdu_compress_path, jp2_residual_path_jp2, SAI->residual_rate_color, 3, offset_v, RESIDUAL_16BIT_bool);
+
+				//decodeResidualJP2(SAI->color, kdu_expand_path, jp2_residual_path_jp2, ppm_residual_path, ncomp1, offset_v, offset_v, RESIDUAL_16BIT_bool);
 
 			}
 
@@ -693,7 +793,7 @@ int main(int argc, char** argv) {
 
 		if (SAI->residual_rate_color > 0) {
 
-			if (SAI->yuv_transform && YUV_TRANSFORM) {
+			if (0){//SAI->yuv_transform && YUV_TRANSFORM) {
 
 				int ncomp_r = SAI->has_chrominance ? 3 : 1;
 
@@ -705,7 +805,11 @@ int main(int argc, char** argv) {
 			}
 			else {
 
-				writeResidualToDisk(jp2_residual_path_jp2, output_LF_file, n_bytes_residual, JP2_dict);
+				writeResidualToDisk(
+                    residual_path_hevc, 
+                    output_LF_file, 
+                    n_bytes_residual, 
+                    JP2_dict);
 			}
 		}
 

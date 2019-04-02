@@ -37,27 +37,63 @@ void predictDepth(view* SAI, view *LF)
 
 		/* merge depth using median*/
 
-		int startt = clock();
+		//int startt = clock();
 
-#pragma omp parallel for
-		for (int ij = 0; ij < SAI->nr*SAI->nc; ij++) {
-			std::vector<unsigned short> depth_values;
-			for (int uu = 0; uu < SAI->n_depth_references; uu++) {
-				//for (int uu = 0; uu < SAI->n_references; uu++) {
-				unsigned short *pp = warped_depth_views_0_N[uu];
-				float *pf = DispTargs_0_N[uu];
-				if (*(pf + ij) > INIT_DISPARITY_VALUE) {
-					depth_values.push_back(*(pp + ij));
-				}
-			}
-			if (depth_values.size() > 0)
-				SAI->depth[ij] = getMedian(depth_values);
-		}
+        double *hole_mask = new double[SAI->nr*SAI->nc]();
 
-		//std::cout << "time elapsed in depth merging\t" << (int)clock() - startt << "\n";
+        for (int32_t ij = 0; ij < SAI->nr * SAI->nc; ij++) {
 
-		/* hole filling for depth */
-		holefilling(SAI->depth, 1, SAI->nr, SAI->nc, 0);
+            hole_mask[ij] = INIT_DISPARITY_VALUE;
+
+            std::vector<uint16_t> depth_values;
+            for (int32_t uu = 0; uu < SAI->n_depth_references; uu++) {
+                uint16_t *pp = warped_depth_views_0_N[uu];
+                float *pf = DispTargs_0_N[uu];
+                if (*(pf + ij) > INIT_DISPARITY_VALUE) {
+                    depth_values.push_back(*(pp + ij));
+                }
+            }
+            if (depth_values.size() > 0) {
+                SAI->depth[ij] = getMedian(depth_values);
+                hole_mask[ij] = 1.0f;
+            }
+        }
+
+        uint32_t nholes = holefilling(
+            SAI->depth,
+            SAI->nr,
+            SAI->nc,
+            INIT_DISPARITY_VALUE,
+            hole_mask);
+
+
+////#pragma omp parallel for
+//		for (int ij = 0; ij < SAI->nr*SAI->nc; ij++) {
+//			std::vector<unsigned short> depth_values;
+//			for (int uu = 0; uu < SAI->n_depth_references; uu++) {
+//				//for (int uu = 0; uu < SAI->n_references; uu++) {
+//				unsigned short *pp = warped_depth_views_0_N[uu];
+//				float *pf = DispTargs_0_N[uu];
+//				if (*(pf + ij) > INIT_DISPARITY_VALUE) {
+//					depth_values.push_back(*(pp + ij));
+//				}
+//			}
+//			if (depth_values.size() > 0)
+//				SAI->depth[ij] = getMedian(depth_values);
+//		}
+//
+//		//std::cout << "time elapsed in depth merging\t" << (int)clock() - startt << "\n";
+//
+//		/* hole filling for depth */
+//		//holefilling(SAI->depth, 1, SAI->nr, SAI->nc, 0);
+//        for (int32_t icomp = 0; icomp < 1; icomp++) {
+//            uint32_t nholes = holefilling(
+//                SAI->depth,
+//                SAI->nr,
+//                SAI->nc,
+//                (uint16_t)0,
+//                SAI->seg_vp);
+//        }
 
 		for (int ij = 0; ij < SAI->n_depth_references; ij++)
 		{

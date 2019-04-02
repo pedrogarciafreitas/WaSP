@@ -30,5 +30,31 @@ void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_
 void encodeResidualJP2(const int nr, const int nc, unsigned short *original_intermediate_view, unsigned short *ps, const char *ppm_residual_path,
 	const char *kdu_compress_path, const char *jp2_residual_path_jp2, const float residual_rate, const int ncomp, const int offset, const bool RESIDUAL_16BIT_bool);
 
+void encodeResidualHM(
+    const int nr,
+    const int nc,
+    unsigned short *original_intermediate_view,
+    unsigned short *ps,
+    const char *ppm_residual_path,
+    const char *kdu_compress_path,
+    const char *jp2_residual_path_jp2,
+    const float residual_rate,
+    const int ncomp,
+    const int offset,
+    const bool RESIDUAL_16BIT_bool,
+    const int Q);
+
+void decodeResidualHM(
+    const int nr,
+    const int nc,
+    unsigned short *ps,
+    const char *kdu_expand_path,
+    const char *jp2_residual_path_jp2,
+    const char *ppm_residual_path,
+    int ncomp,
+    const int offset,
+    const int maxvali,
+    const bool RESIDUAL_16BIT_bool,
+    const int Q);
 
 #endif

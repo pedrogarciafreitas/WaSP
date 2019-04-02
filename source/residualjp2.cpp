@@ -5,6 +5,10 @@
 #include "clip.hh"
 #include "medianfilter.hh"
 
+#include <iostream>
+#include <iomanip>
+#include <fstream>
+#include <sstream>
 #include <cstdlib>
 #include <cstdio>
 #include <cstring>
@@ -12,7 +16,7 @@
 #include <vector>
 
 #define CLEVELS 6
-#define USE_JP2_DICTIONARY 1
+#define USE_JP2_DICTIONARY 0
 
 void getJP2Header(unsigned char *JP2, unsigned char *&header, int JP2Size, int &headerSize) {
 
@@ -413,4 +417,151 @@ void encodeResidualJP2(const int nr, const int nc, unsigned short *original_inte
 	//std::cout << kdu_compress_s << "\n";
 
 	int status = system_1(kdu_compress_s);
+}
+
+
+void encodeResidualHM(
+    const int nr, 
+    const int nc, 
+    unsigned short *original_intermediate_view, 
+    unsigned short *ps, 
+    const char *ppm_residual_path,
+    const char *kdu_compress_path, 
+    const char *jp2_residual_path_jp2, 
+    const float residual_rate, 
+    const int ncomp, 
+    const int offset, 
+    const bool RESIDUAL_16BIT_bool,
+    const int Q)
+{
+    /*establish residual*/
+    unsigned short *residual_image = new unsigned short[nr*nc * ncomp]();
+
+    signed int dv = RESIDUAL_16BIT_bool ? 1 : 2;
+    signed int BP = RESIDUAL_16BIT_bool ? 16 : 10;
+    signed int maxval = (1 << BP) - 1;// pow(2, BP) - 1;
+
+    dv = static_cast<signed int>(Q);
+
+    for (int iir = 0; iir < nr*nc*ncomp; iir++) {
+        signed int res_val = ((((signed int)*(original_intermediate_view + iir)) - ((signed int)*(ps + iir)) + offset)) / dv;
+        res_val = clip(res_val, 0, maxval);
+        *(residual_image + iir) = (unsigned short)(res_val);
+    }
+
+    aux_write16PGMPPM(ppm_residual_path, nc, nr, ncomp, residual_image);
+
+    delete[](residual_image);
+
+    /* convert to YUV420 */
+
+    char RGB_2_YUV420_s[1024];
+    sprintf(
+        RGB_2_YUV420_s,
+        "%s%s%s",
+        "C:/Local/astolap/Programs/ffmpeg-20190225-f948082-win64-static/bin/ffmpeg.exe -y -i ",
+        ppm_residual_path,
+        " -c:v rawvideo -pix_fmt yuv420p10le C:/Temp/tmp.yuv");
+
+    int status = system_1(RGB_2_YUV420_s);
+
+    /* make HM cfg */
+
+    std::ifstream inFile("C:/Local/astolap/Data/JPEG_PLENO_2019/GENEVA/Matlab/intra_cfg_1.txt");
+    std::ostringstream buffer;
+    buffer << inFile.rdbuf();
+    inFile.close();
+
+    std::ofstream outFile("C:/Temp/intra_cfg_enc.cfg", std::ios_base::out);
+    std::string str;
+    str.append(buffer.str());
+    str.append("\nTargetBitrate\t: ");
+    str.append(std::to_string(static_cast<uint32_t>(residual_rate*nr*nc)));
+    outFile << str;
+    //outFile << "TargetBitrate\t: ";
+    //outFile << static_cast<uint32_t>(residual_rate*nr*nc);
+    outFile.close();
+
+    /* encode with HM */
+
+    char HM_call_s[1024];
+    sprintf(HM_call_s,
+        "C:/Local/astolap/Data/JPEG_PLENO_2019/BRUSSELS/HEVC-HM/bin/vc2015/x64/Release/TAppEncoder.exe -c C:/Temp/intra_cfg_enc.cfg -i C:/Temp/tmp.yuv -o C:/Temp/tmp_rec.yuv -fr 1 -wdt %i -hgt %i -b %s",
+        nc,
+        nr,
+        jp2_residual_path_jp2);
+
+    status = system_1(HM_call_s);
+
+}
+
+void decodeResidualHM(
+    const int nr,
+    const int nc,
+    unsigned short *ps, 
+    const char *kdu_expand_path, 
+    const char *jp2_residual_path_jp2,
+    const char *ppm_residual_path,
+    int ncomp, 
+    const int offset,
+    const int maxvali,
+    const bool RESIDUAL_16BIT_bool,
+    int Q)
+{
+
+    /*decode HM*/
+    char hm_decode_s[1024];
+    sprintf(hm_decode_s,
+        "C:/Local/astolap/Data/JPEG_PLENO_2019/BRUSSELS/HEVC-HM/bin/vc2015/x64/Release/TAppDecoder.exe -b %s -o %s",
+        jp2_residual_path_jp2,
+        "C:/Temp/tmp_rec.yuv");
+
+    int status = system_1(hm_decode_s);
+
+    /*convert to rgb*/
+    char YUV420_2_RGB_s[1024];
+    sprintf(
+        YUV420_2_RGB_s,
+        "C:/Local/astolap/Programs/ffmpeg-20190225-f948082-win64-static/bin/ffmpeg.exe -y -s:v %ix%i -pix_fmt yuv420p10le -r 1 -i %s -y %s",
+        nc,
+        nr,
+        "C:/Temp/tmp_rec.yuv",
+        ppm_residual_path);
+
+    status = system_1(YUV420_2_RGB_s);
+
+    /* convert */
+
+    signed int dv = RESIDUAL_16BIT_bool ? 1 : 2;
+    signed int BP = RESIDUAL_16BIT_bool ? 16 : 10;
+    signed int maxval = (1 << BP) - 1;// pow(2, BP) - 1;
+
+                                      /* apply residual */
+
+    dv = static_cast<signed int>(Q);
+
+
+    unsigned short* jp2_residual;
+
+    int nc1, nr1;
+
+    aux_read16PGMPPM(ppm_residual_path, nc1, nr1, ncomp, jp2_residual);
+
+    for (int ii = 0; ii < nc1*nr1*ncomp; ii++) {
+        jp2_residual[ii] = jp2_residual[ii] >> 6;
+    }
+    aux_write16PGMPPM(ppm_residual_path, nc1, nr1, ncomp, jp2_residual);
+
+    if (aux_read16PGMPPM(ppm_residual_path, nc1, nr1, ncomp, jp2_residual))
+    {
+
+        for (int iir = 0; iir < nc1*nr1 * ncomp; iir++)
+        {
+            signed int val = (signed int)*(ps + iir) + (signed int)(jp2_residual[iir] * dv) - offset; // we assume that for 10bit case we have offset as 2^10-1, so go from 2^11 range to 2^10 and lose 1 bit of precision
+            val = clip(val, 0, maxvali);
+            *(ps + iir) = (unsigned short)(val);
+        }
+
+        delete[](jp2_residual);
+    }
 }

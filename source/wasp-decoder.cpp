@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
 	int yuv_transform_s;
 	n_bytes_prediction += (int)fread(&yuv_transform_s, sizeof(int), 1, input_LF)* sizeof(int);
 
-	YUV_TRANSFORM = yuv_transform_s > 0 ? true : false;
+    YUV_TRANSFORM = false;// yuv_transform_s > 0 ? true : false;
 
 	unsigned short MINIMUM_DEPTH = 0;
 	n_bytes_prediction += (int)fread(&MINIMUM_DEPTH, sizeof(unsigned short), 1, input_LF) * sizeof(unsigned short);
@@ -146,7 +146,15 @@ int main(int argc, char** argv) {
 					/* merge color with prediction */
 					mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
 					/* hole filling for color*/
-					holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+					//holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+                    for (int32_t icomp = 0; icomp < 3; icomp++) {
+                        uint32_t nholes = holefilling(
+                            SAI->color + icomp*SAI->nr*SAI->nc,
+                            SAI->nr,
+                            SAI->nc,
+                            (uint16_t)0,
+                            SAI->seg_vp);
+                    }
 				}
 				else {
 					/* we don't use LS weights but something derived on geometric distance in view array*/
@@ -154,14 +162,30 @@ int main(int argc, char** argv) {
 					/* merge color with prediction */
 					mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
 					/* hole filling for color*/
-					holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+					//holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+                    for (int32_t icomp = 0; icomp < 3; icomp++) {
+                        uint32_t nholes = holefilling(
+                            SAI->color + icomp*SAI->nr*SAI->nc,
+                            SAI->nr,
+                            SAI->nc,
+                            (uint16_t)0,
+                            SAI->seg_vp);
+                    }
 				}
 			}
 			else {
 				int startt = clock();
 				mergeMedian_N(warped_color_views, DispTargs, SAI, 3);
 				std::cout << "time elapsed in color median merging\t" << (int)clock() - startt << "\n";
-				holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+				//holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+                for (int32_t icomp = 0; icomp < 3; icomp++) {
+                    uint32_t nholes = holefilling(
+                        SAI->color + icomp*SAI->nr*SAI->nc,
+                        SAI->nr,
+                        SAI->nc,
+                        (uint16_t)0,
+                        SAI->seg_vp);
+                }
 			}
 			
 			/* clean */
@@ -190,7 +214,7 @@ int main(int argc, char** argv) {
 		if ( SAI->has_color_residual )
 		{
 			//n_bytes_residual += (int)fread(&n_bytes_color_residual, sizeof(int), 1, input_LF)* sizeof(int);
-			if (SAI->yuv_transform && YUV_TRANSFORM) {
+			if (0){//(SAI->yuv_transform && YUV_TRANSFORM) {
 
 				char pgm_residual_Y_path[1024];
 				char jp2_residual_Y_path_jp2[1024];
@@ -244,15 +268,47 @@ int main(int argc, char** argv) {
 
 				char ppm_residual_path[1024];
 
-				char jp2_residual_path_jp2[1024];
+				//char jp2_residual_path_jp2[1024];
+
+                char residual_path_hevc[1024];
+
+                sprintf(
+                    residual_path_hevc,
+                    "%s%c%03d_%03d%s",
+                    output_dir,
+                    '/',
+                    SAI->c,
+                    SAI->r,
+                    "_residual.hevc");
 
 				sprintf(ppm_residual_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.ppm");
 
-				sprintf(jp2_residual_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.jp2");
+			/*	sprintf(jp2_residual_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.jp2");*/
 
-				readResidualFromDisk(jp2_residual_path_jp2, n_bytes_residual, input_LF, JP2_dict);
+				readResidualFromDisk(residual_path_hevc, n_bytes_residual, input_LF, JP2_dict);
 
-				decodeResidualJP2(SAI->color, kdu_expand_path, jp2_residual_path_jp2, ppm_residual_path, ncomp1, (1 << BIT_DEPTH) - 1, (1 << BIT_DEPTH) - 1, RESIDUAL_16BIT_bool);
+				//decodeResidualJP2(SAI->color, kdu_expand_path, jp2_residual_path_jp2, ppm_residual_path, ncomp1, (1 << BIT_DEPTH) - 1, (1 << BIT_DEPTH) - 1, RESIDUAL_16BIT_bool);
+
+                int offset_v = (1 << BIT_DEPTH) - 1;
+                int Q = 2;
+
+                if (SAI->level < 2) {
+                    offset_v = 0;
+                    Q = 1;
+                }
+
+                decodeResidualHM(
+                    SAI->nr,
+                    SAI->nc,
+                    SAI->color,
+                    kdu_expand_path,
+                    residual_path_hevc,
+                    ppm_residual_path,
+                    ncomp1,
+                    offset_v,
+                    (1 << BIT_DEPTH) - 1,
+                    RESIDUAL_16BIT_bool,
+                    Q);
 			}
 			
 		}

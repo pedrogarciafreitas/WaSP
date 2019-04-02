@@ -31,6 +31,8 @@ minimal_config makeMinimalConfig(view *view0)
 
 	min_conf.encoding_flags = view0->has_chrominance ? min_conf.encoding_flags | (1 << 10) : min_conf.encoding_flags;
 
+    min_conf.encoding_flags = view0->level<2 ? min_conf.encoding_flags | (1 << 11) : min_conf.encoding_flags;
+
 	//min_conf.encoding_flags = view0->has_min_inv_depth ? min_conf.encoding_flags | (1 << 8) : min_conf.encoding_flags;
 
 	return min_conf;
@@ -60,6 +62,8 @@ void setup_form_minimal_config(minimal_config *mconf, view *view0) {
 	view0->has_y_displacement = (mconf->encoding_flags & (1 << 9))>0 ? 1 : 0;
 
 	view0->has_chrominance = (mconf->encoding_flags & (1 << 10))>0 ? 1 : 0;
+
+    view0->level = (mconf->encoding_flags & (1 << 11))>0 ? 1 : 2;
 
 	//view0->has_min_inv_depth = (mconf->encoding_flags & (1 << 8))>0 ? 1 : 0;
 }

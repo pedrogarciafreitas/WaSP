@@ -280,22 +280,22 @@ int main(int argc, char** argv) {
 
 				char jp2_residual_path_jp2[1024];
 
-                char residual_path_hevc[1024];
+                //char residual_path_hevc[1024];
 
-                sprintf(
+ /*               sprintf(
                     residual_path_hevc,
                     "%s%c%03d_%03d%s",
                     output_dir,
                     '/',
                     SAI->c,
                     SAI->r,
-                    "_residual.hevc");
+                    "_residual.hevc");*/
 
 				sprintf(ppm_residual_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.ppm");
 
 			    sprintf(jp2_residual_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.jp2");
 
-				readResidualFromDisk(residual_path_hevc, n_bytes_residual, input_LF, JP2_dict);
+				readResidualFromDisk(jp2_residual_path_jp2, n_bytes_residual, input_LF, JP2_dict);
 			
                 int offset_v = (1 << BIT_DEPTH) - 1;
                 int Q = 2;

@@ -523,7 +523,7 @@ int main(int argc, char** argv) {
 
 		char jp2_residual_path_jp2[1024];
 
-        char residual_path_hevc[1024];
+        //char residual_path_hevc[1024];
 
 		char pgm_residual_Y_path[1024];
 		char jp2_residual_Y_path_jp2[1024];
@@ -559,14 +559,14 @@ int main(int argc, char** argv) {
 			sprintf(ppm_residual_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.ppm");
 			sprintf(jp2_residual_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.jp2");
 
-            sprintf(
-                residual_path_hevc, 
-                "%s%c%03d_%03d%s", 
-                output_dir,
-                '/', 
-                SAI->c,
-                SAI->r,
-                "_residual.hevc");
+            //sprintf(
+            //    residual_path_hevc, 
+            //    "%s%c%03d_%03d%s", 
+            //    output_dir,
+            //    '/', 
+            //    SAI->c,
+            //    SAI->r,
+            //    "_residual.hevc");
 
 			ycbcr_pgm_names[0] = pgm_residual_Y_path;
 			ycbcr_pgm_names[1] = pgm_residual_Cb_path;
@@ -583,7 +583,7 @@ int main(int argc, char** argv) {
 				memcpy(tmpim, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
 
 				int offset_v = 0;
-                int Q = 2;
+                int Q = 1;
 
 				if (RESIDUAL_16BIT) {
 					offset_v = (1<<15) - 1;
@@ -861,7 +861,7 @@ int main(int argc, char** argv) {
 			else {
 
 				writeResidualToDisk(
-                    residual_path_hevc, 
+                    jp2_residual_path_jp2,
                     output_LF_file, 
                     n_bytes_residual, 
                     JP2_dict);

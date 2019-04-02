@@ -214,7 +214,7 @@ int main(int argc, char** argv) {
 		if ( SAI->has_color_residual )
 		{
 			//n_bytes_residual += (int)fread(&n_bytes_color_residual, sizeof(int), 1, input_LF)* sizeof(int);
-			if (0){//(SAI->yuv_transform && YUV_TRANSFORM) {
+			if(SAI->yuv_transform && YUV_TRANSFORM) {
 
 				char pgm_residual_Y_path[1024];
 				char jp2_residual_Y_path_jp2[1024];
@@ -251,15 +251,25 @@ int main(int argc, char** argv) {
 
 				}
 
-				int offset_v = 0;
-				if (RESIDUAL_16BIT) {
-					offset_v = (1 << 15) - 1;// pow(2, 15) - 1;
-				}
-				else {
-					offset_v = (1 << 10) - 1;// pow(2, 10) - 1;
-				}
+                int offset_v = 0;
+                int Q = 2;
 
-				decodeResidualJP2_YUV(SAI->color, kdu_expand_path, ycbcr_jp2_names, ycbcr_pgm_names, ncomp_r, offset_v, (1 << 10) - 1, RESIDUAL_16BIT_bool);
+                if (RESIDUAL_16BIT) {
+                    offset_v = (1 << 15) - 1;
+                }
+                else {
+                    if (SAI->level < 2) {
+                        offset_v = 0;
+                        Q = 1;
+                    }
+                    else {
+                        offset_v = (1 << BIT_DEPTH) - 1;
+                        Q = 2;
+                    }
+
+                }
+
+				decodeResidualJP2_YUV(SAI->color, kdu_expand_path, ycbcr_jp2_names, ycbcr_pgm_names, ncomp_r, offset_v, (1 << 10) - 1, RESIDUAL_16BIT_bool,Q);
 
 			}
 			else {
@@ -268,7 +278,7 @@ int main(int argc, char** argv) {
 
 				char ppm_residual_path[1024];
 
-				//char jp2_residual_path_jp2[1024];
+				char jp2_residual_path_jp2[1024];
 
                 char residual_path_hevc[1024];
 
@@ -283,12 +293,10 @@ int main(int argc, char** argv) {
 
 				sprintf(ppm_residual_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.ppm");
 
-			/*	sprintf(jp2_residual_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.jp2");*/
+			    sprintf(jp2_residual_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_residual.jp2");
 
 				readResidualFromDisk(residual_path_hevc, n_bytes_residual, input_LF, JP2_dict);
-
-				//decodeResidualJP2(SAI->color, kdu_expand_path, jp2_residual_path_jp2, ppm_residual_path, ncomp1, (1 << BIT_DEPTH) - 1, (1 << BIT_DEPTH) - 1, RESIDUAL_16BIT_bool);
-
+			
                 int offset_v = (1 << BIT_DEPTH) - 1;
                 int Q = 2;
 
@@ -297,18 +305,20 @@ int main(int argc, char** argv) {
                     Q = 1;
                 }
 
-                decodeResidualHM(
-                    SAI->nr,
-                    SAI->nc,
-                    SAI->color,
-                    kdu_expand_path,
-                    residual_path_hevc,
-                    ppm_residual_path,
-                    ncomp1,
-                    offset_v,
-                    (1 << BIT_DEPTH) - 1,
-                    RESIDUAL_16BIT_bool,
-                    Q);
+                decodeResidualJP2(SAI->color, kdu_expand_path, jp2_residual_path_jp2, ppm_residual_path, ncomp1, offset_v, (1 << BIT_DEPTH) - 1, RESIDUAL_16BIT_bool,Q);
+
+                //decodeResidualHM(
+                //    SAI->nr,
+                //    SAI->nc,
+                //    SAI->color,
+                //    kdu_expand_path,
+                //    residual_path_hevc,
+                //    ppm_residual_path,
+                //    ncomp1,
+                //    offset_v,
+                //    (1 << BIT_DEPTH) - 1,
+                //    RESIDUAL_16BIT_bool,
+                //    Q);
 			}
 			
 		}
@@ -330,7 +340,7 @@ int main(int argc, char** argv) {
 
 			readResidualFromDisk(jp2_residual_depth_path_jp2, n_bytes_residual, input_LF, JP2_dict);
 
-			decodeResidualJP2(SAI->depth, kdu_expand_path, jp2_residual_depth_path_jp2, pgm_residual_depth_path, ncomp1, 0, (1 << 16) - 1,1);
+			decodeResidualJP2(SAI->depth, kdu_expand_path, jp2_residual_depth_path_jp2, pgm_residual_depth_path, ncomp1, 0, (1 << 16) - 1,1,1);
 
 		}
 

@@ -16,7 +16,7 @@
 #include <vector>
 
 #define CLEVELS 6
-#define USE_JP2_DICTIONARY 0
+#define USE_JP2_DICTIONARY 1
 
 void getJP2Header(unsigned char *JP2, unsigned char *&header, int JP2Size, int &headerSize) {
 
@@ -188,8 +188,16 @@ void writeResidualToDisk(const char *jp2_residual_path_jp2, FILE *output_LF_file
 	
 }
 
-void decodeResidualJP2(unsigned short *ps, const char *kdu_expand_path, const char *jp2_residual_path_jp2, const char *ppm_residual_path, int ncomp, const int offset, const int maxvali,
-	const bool RESIDUAL_16BIT_bool)
+void decodeResidualJP2(
+    unsigned short *ps,
+    const char *kdu_expand_path, 
+    const char *jp2_residual_path_jp2,
+    const char *ppm_residual_path, 
+    int ncomp,
+    const int offset, 
+    const int maxvali,
+	const bool RESIDUAL_16BIT_bool,
+    const int Q)
 {
 	/* decode residual with kakadu */
 	char kdu_expand_s[1024];
@@ -202,6 +210,8 @@ void decodeResidualJP2(unsigned short *ps, const char *kdu_expand_path, const ch
 	signed int dv = RESIDUAL_16BIT_bool ? 1 : 2;
 	signed int BP = RESIDUAL_16BIT_bool ? 16 : 10;
 	signed int maxval = (1 << BP) - 1;// pow(2, BP) - 1;
+
+    dv = static_cast<signed int>(Q);
 
 	/* apply residual */
 
@@ -224,7 +234,7 @@ void decodeResidualJP2(unsigned short *ps, const char *kdu_expand_path, const ch
 }
 
 void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char *ycbcr_jp2_names[], char *ycbcr_pgm_names[], const int ncomp, const int offset, const int maxvali,
-	const bool RESIDUAL_16BIT_bool)
+	const bool RESIDUAL_16BIT_bool, const int Q)
 {
 	/* decode residual with kakadu */
 	char kdu_expand_s[1024];
@@ -279,6 +289,8 @@ void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char
 	}
 
 	signed int dv = RESIDUAL_16BIT_bool ? 1 : 2;
+
+    dv = static_cast<signed int>(Q);
 	
 	signed int maxval = (1 << (BP)) - 1;// pow(2, BP) - 1;
 
@@ -312,7 +324,7 @@ void decodeResidualJP2_YUV(unsigned short *ps, const char *kdu_expand_path, char
 
 void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_intermediate_view, unsigned short *ps, char *ycbcr_pgm_names[],
 	const char *kdu_compress_path, char *ycbcr_jp2_names[], const float residual_rate, const int ncomp, const int offset, float rate_a,
-	const bool RESIDUAL_16BIT_bool)
+	const bool RESIDUAL_16BIT_bool, const int Q)
 {
 	/*establish residual*/
 	unsigned short *residual_image = new unsigned short[nr*nc * 3]();
@@ -320,6 +332,8 @@ void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_
 	signed int dv = RESIDUAL_16BIT_bool ? 1 : 2;
 	signed int BP = RESIDUAL_16BIT_bool ? 16 : 10;
 	signed int maxval = (1 << BP) - 1;// pow(2, BP) - 1;
+
+    dv = static_cast<signed int>(Q);
 
 	for (int iir = 0; iir < nr*nc*3; iir++) {
 		signed int res_val = ( (((signed int)*(original_intermediate_view + iir)) - ((signed int)*(ps + iir)) + offset) )/dv;
@@ -388,8 +402,19 @@ void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_
 
 }
 
-void encodeResidualJP2(const int nr, const int nc, unsigned short *original_intermediate_view, unsigned short *ps, const char *ppm_residual_path,
-	const char *kdu_compress_path, const char *jp2_residual_path_jp2, const float residual_rate, const int ncomp, const int offset, const bool RESIDUAL_16BIT_bool)
+void encodeResidualJP2(
+    const int nr, 
+    const int nc, 
+    unsigned short *original_intermediate_view, 
+    unsigned short *ps,
+    const char *ppm_residual_path,
+	const char *kdu_compress_path, 
+    const char *jp2_residual_path_jp2,
+    const float residual_rate, 
+    const int ncomp, 
+    const int offset, 
+    const bool RESIDUAL_16BIT_bool,
+    const int Q)
 {
 	/*establish residual*/
 	unsigned short *residual_image = new unsigned short[nr*nc * ncomp]();
@@ -397,6 +422,8 @@ void encodeResidualJP2(const int nr, const int nc, unsigned short *original_inte
 	signed int dv = RESIDUAL_16BIT_bool ? 1 : 2;
 	signed int BP = RESIDUAL_16BIT_bool ? 16 : 10;
 	signed int maxval = (1 << BP) - 1;// pow(2, BP) - 1;
+
+    dv = static_cast<signed int>(Q);
 
 	for (int iir = 0; iir < nr*nc*ncomp; iir++) {
 		signed int res_val = ((((signed int)*(original_intermediate_view + iir)) - ((signed int)*(ps + iir)) + offset)) / dv;

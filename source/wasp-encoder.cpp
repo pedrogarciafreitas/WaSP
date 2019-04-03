@@ -82,8 +82,8 @@ int main(int argc, char** argv) {
 	fread(&yuv_ratio_search_s, sizeof(int), 1, filept); /*reading*/
 	fread(&std_search_s, sizeof(int), 1, filept); /*reading*/
 
-	YUV_TRANSFORM = yuv_transform_s > 0 ? true : false;
-	YUV_RATIO_SEARCH = yuv_ratio_search_s > 0 ? true : false;
+	//YUV_TRANSFORM = yuv_transform_s > 0 ? true : false;
+	//YUV_RATIO_SEARCH = yuv_ratio_search_s > 0 ? true : false;
 	STD_SEARCH = std_search_s > 0 ? true : false;
 
 	unsigned short MINIMUM_DEPTH = 0;

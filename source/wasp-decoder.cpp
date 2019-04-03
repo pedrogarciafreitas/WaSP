@@ -53,7 +53,7 @@ int main(int argc, char** argv) {
 	int yuv_transform_s;
 	n_bytes_prediction += (int)fread(&yuv_transform_s, sizeof(int), 1, input_LF)* sizeof(int);
 
-    YUV_TRANSFORM = false;// yuv_transform_s > 0 ? true : false;
+    YUV_TRANSFORM = yuv_transform_s > 0 ? true : false;
 
 	unsigned short MINIMUM_DEPTH = 0;
 	n_bytes_prediction += (int)fread(&MINIMUM_DEPTH, sizeof(unsigned short), 1, input_LF) * sizeof(unsigned short);

@@ -472,6 +472,7 @@ void encodeResidualHM(
     //aux_write16PGMPPM(ppm_residual_path, nc, nr, ncomp, residual_image);
     aux_write16PGMPPM(ppm_residual_path, nc1, nr1, ncomp, temp_im);
 
+    delete[](temp_im);
     delete[](residual_image);
 
     /* convert to YUV420 */
@@ -581,6 +582,8 @@ void decodeResidualHM(
         }
     }
 
+    delete[](jp2_residual_padded);
+
     aux_write16PGMPPM(ppm_residual_path, nc, nr, ncomp, jp2_residual);
 
     if (aux_read16PGMPPM(ppm_residual_path, nc1, nr1, ncomp, jp2_residual))
@@ -593,8 +596,9 @@ void decodeResidualHM(
             *(ps + iir) = (unsigned short)(val);
         }
 
-        delete[](jp2_residual);
+        
     }
+    delete[](jp2_residual);
 }
 
 
@@ -650,6 +654,9 @@ void encodeMonochromeResidualHM(
     FILE *temp_yuv = fopen("C:/Temp/tmp.yuv", "wb");
     fwrite(residual_image, sizeof(unsigned short), nr1*nc1,temp_yuv);
     fclose(temp_yuv);
+
+    delete[](residual_image);
+    delete[](temp_im);
 
     /* make HM cfg */
 
@@ -742,6 +749,8 @@ void decodeMonochromeResidualHM(
         }
     }
 
+    delete[](tmp_rec_im);
+
     aux_write16PGMPPM(ppm_residual_path, nc, nr, ncomp, jp2_residual);
 
     int ncomp1;
@@ -756,6 +765,8 @@ void decodeMonochromeResidualHM(
             *(ps + iir) = (unsigned short)(val);
         }
 
-        delete[](jp2_residual);
+       
     }
+
+    delete[](jp2_residual);
 }

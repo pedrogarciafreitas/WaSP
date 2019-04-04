@@ -470,10 +470,11 @@ void encodeMonochromeResidualHM(
         temp_im[ii] = offset / dv;
     }
 
-    for (int rr = 0; rr < nr; rr++) {
-        for (int cc = 0; cc < nc; cc++) {
+    int ee = 0;
+    for (int rr = 0; rr < nr1; rr++) {
+        for (int cc = 0; cc < nc1; cc++) {
             for (int icomp = 0; icomp < ncomp; icomp++) {
-                temp_im[cc + rr*nc1 + icomp*(nc1)*(nr1)] =
+                temp_im[cc + rr*nc1 + icomp*nc1*nr1] =
                     residual_image[rr + cc*nr + icomp*nc*nr];
             }
         }
@@ -483,8 +484,8 @@ void encodeMonochromeResidualHM(
     fwrite(temp_im, sizeof(unsigned short), nr1*nc1, temp_yuv);
     fclose(temp_yuv);
 
-    delete[](temp_im);
     delete[](residual_image);
+    delete[](temp_im);
 
     /* make HM cfg */
 
@@ -536,7 +537,7 @@ void decodeMonochromeResidualHM(
     sprintf(hm_decode_s,
         "C:/Local/astolap/Data/JPEG_PLENO_2019/BRUSSELS/HEVC-HM/bin/vc2015/x64/Release/TAppDecoder.exe -b %s -o %s",
         jp2_residual_path_jp2,
-        "C:/Temp/tmp_rec.yuv");
+        "C:/Temp/tmp_rec_dec.yuv");
 
     int status = system_1(hm_decode_s);
 
@@ -546,9 +547,10 @@ void decodeMonochromeResidualHM(
 
     unsigned short *tmp_rec_im = new unsigned short[nr1*nc1]();
 
-    FILE *tmp_yuv_rec = fopen("C:/Temp/tmp_rec.yuv", "rb");
+    FILE *tmp_yuv_rec = fopen("C:/Temp/tmp_rec_dec.yuv", "rb");
     fread(tmp_rec_im, sizeof(unsigned short), nr1*nc1, tmp_yuv_rec);
     fclose(tmp_yuv_rec);
+
 
     /* convert */
 
@@ -592,7 +594,7 @@ void decodeMonochromeResidualHM(
             *(ps + iir) = (unsigned short)(val);
         }
 
-        
+
     }
 
     delete[](jp2_residual);

@@ -473,6 +473,7 @@ void encodeResidualHM(
     aux_write16PGMPPM(ppm_residual_path, nc1, nr1, ncomp, temp_im);
 
     delete[](residual_image);
+    delete[](temp_im);
 
     /* convert to YUV420 */
 
@@ -593,6 +594,8 @@ void decodeResidualHM(
             *(ps + iir) = (unsigned short)(val);
         }
 
-        delete[](jp2_residual);
+        
     }
+    delete[](jp2_residual);
+    delete[](jp2_residual_padded);
 }

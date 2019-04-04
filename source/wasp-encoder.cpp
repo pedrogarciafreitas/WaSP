@@ -476,7 +476,9 @@ int main(int argc, char** argv) {
 
 		char pgm_residual_depth_path[1024];
 
-		char jp2_residual_depth_path_jp2[1024];
+		//char jp2_residual_depth_path_jp2[1024];
+
+        char residual_depth_path_hevc[1024];
 
 		char *ycbcr_pgm_names[3];
 		char *ycbcr_jp2_names[3];
@@ -622,12 +624,49 @@ int main(int argc, char** argv) {
 
 			sprintf(pgm_residual_depth_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.pgm");
 
-			sprintf(jp2_residual_depth_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.jp2");
+            sprintf(
+                residual_depth_path_hevc,
+                "%s%c%03d_%03d%s",
+                output_dir,
+                '/',
+                SAI->c,
+                SAI->r,
+                "_depth_residual.hevc");
 
-			encodeResidualJP2(SAI->nr, SAI->nc, original_depth_view, SAI->depth, pgm_residual_depth_path,
-				kdu_compress_path, jp2_residual_depth_path_jp2, SAI->residual_rate_depth, 1, 0, 1);
+            encodeMonochromeResidualHM(
+                SAI->nr,
+                SAI->nc,
+                original_depth_view,
+                SAI->depth,
+                pgm_residual_depth_path,
+                kdu_compress_path,
+                residual_depth_path_hevc,
+                SAI->residual_rate_depth,
+                1,
+                0,
+                1,
+                1);
 
-			decodeResidualJP2(SAI->depth, kdu_expand_path, jp2_residual_depth_path_jp2, pgm_residual_depth_path, ncomp1, 0, (1<<16) - 1, 1);
+            decodeMonochromeResidualHM(
+                SAI->nr,
+                SAI->nc,
+                SAI->depth,
+                kdu_expand_path,
+                residual_depth_path_hevc,
+                pgm_residual_depth_path,
+                1,
+                0,
+                (1 << 16) - 1,
+                1,
+                1);
+
+
+			//sprintf(jp2_residual_depth_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.jp2");
+
+			//encodeResidualJP2(SAI->nr, SAI->nc, original_depth_view, SAI->depth, pgm_residual_depth_path,
+			//	kdu_compress_path, jp2_residual_depth_path_jp2, SAI->residual_rate_depth, 1, 0, 1);
+
+			//decodeResidualJP2(SAI->depth, kdu_expand_path, jp2_residual_depth_path_jp2, pgm_residual_depth_path, ncomp1, 0, (1<<16) - 1, 1);
 
 			SAI->has_depth_residual = true;
 		}
@@ -711,7 +750,14 @@ int main(int argc, char** argv) {
 
 		if (SAI->residual_rate_depth > 0 && depth_file_exist) {
 
-			writeResidualToDisk(jp2_residual_depth_path_jp2, output_LF_file, n_bytes_residual, JP2_dict);
+			//writeResidualToDisk(jp2_residual_depth_path_jp2, output_LF_file, n_bytes_residual, JP2_dict);
+
+            writeResidualToDisk(
+                residual_depth_path_hevc, 
+                output_LF_file,
+                n_bytes_residual,
+                JP2_dict,
+                false);
 
 		}
 

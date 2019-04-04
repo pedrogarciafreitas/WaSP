@@ -10,12 +10,16 @@ int getJP2DictionaryIndex(unsigned char *JP2header, int headerSize,
 	std::vector< std::vector<unsigned char>> JP2_dict);
 
 void readResidualFromDisk(const char *jp2_residual_path_jp2, int &n_bytes_residual, FILE *input_LF,
-	std::vector< std::vector<unsigned char>> &JP2_dict);
+	std::vector< std::vector<unsigned char>> &JP2_dict, const bool USE_JP2_DICTIONARY_ = 1);
 
 void updateJP2Dictionary(std::vector< std::vector<unsigned char>> &JP2_dict, unsigned char *header, int headerSize);
 
-void writeResidualToDisk(const char *jp2_residual_path_jp2, FILE *output_LF_file, int &n_bytes_residual,
-	std::vector< std::vector<unsigned char>> &JP2_dict);
+void writeResidualToDisk(
+    const char *jp2_residual_path_jp2,
+    FILE *output_LF_file,
+    int &n_bytes_residual,
+	std::vector< std::vector<unsigned char>> &JP2_dict,
+    const bool USE_JP2_DICTIONARY_ = 1);
 
 void decodeResidualJP2(unsigned short *ps, const char *kdu_expand_path, const char *jp2_residual_path_jp2, const char *ppm_residual_path, int ncomp, const int offset, const int maxvali,
 	const bool RESIDUAL_16BIT_bool);
@@ -30,5 +34,32 @@ void encodeResidualJP2_YUV(const int nr, const int nc, unsigned short *original_
 void encodeResidualJP2(const int nr, const int nc, unsigned short *original_intermediate_view, unsigned short *ps, const char *ppm_residual_path,
 	const char *kdu_compress_path, const char *jp2_residual_path_jp2, const float residual_rate, const int ncomp, const int offset, const bool RESIDUAL_16BIT_bool);
 
+
+void encodeMonochromeResidualHM(
+    const int nr,
+    const int nc,
+    unsigned short *original_intermediate_view,
+    unsigned short *ps,
+    const char *ppm_residual_path,
+    const char *kdu_compress_path,
+    const char *jp2_residual_path_jp2,
+    const float residual_rate,
+    const int ncomp,
+    const int offset,
+    const bool RESIDUAL_16BIT_bool,
+    const int Q);
+
+void decodeMonochromeResidualHM(
+    const int nr,
+    const int nc,
+    unsigned short *ps,
+    const char *kdu_expand_path,
+    const char *jp2_residual_path_jp2,
+    const char *ppm_residual_path,
+    const int ncomp,
+    const int offset,
+    const int maxvali,
+    const bool RESIDUAL_16BIT_bool,
+    int Q);
 
 #endif

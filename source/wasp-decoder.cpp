@@ -318,19 +318,43 @@ int main(int argc, char** argv) {
 
 			//n_bytes_residual =+ (int)fread(&n_bytes_depth_residual, sizeof(int), 1, input_LF)* sizeof(int);
 
-			int ncomp1 = 0; /* temporary to hold the number of components */
+			int ncomp1 = 1; /* temporary to hold the number of components */
 
 			char pgm_residual_depth_path[1024];
 
-			char jp2_residual_depth_path_jp2[1024];
+			//char jp2_residual_depth_path_jp2[1024];
+
+            char residual_depth_path_hevc[1024];
+
+            sprintf(
+                residual_depth_path_hevc,
+                "%s%c%03d_%03d%s",
+                output_dir,
+                '/',
+                SAI->c,
+                SAI->r,
+                "_depth_residual.hevc");
 
 			sprintf(pgm_residual_depth_path, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.pgm");
 
-			sprintf(jp2_residual_depth_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.jp2");
+			//sprintf(jp2_residual_depth_path_jp2, "%s%c%03d_%03d%s", output_dir, '/', SAI->c, SAI->r, "_depth_residual.jp2");
 
-			readResidualFromDisk(jp2_residual_depth_path_jp2, n_bytes_residual, input_LF, JP2_dict);
+			readResidualFromDisk(residual_depth_path_hevc, n_bytes_residual, input_LF, JP2_dict);
 
-			decodeResidualJP2(SAI->depth, kdu_expand_path, jp2_residual_depth_path_jp2, pgm_residual_depth_path, ncomp1, 0, (1 << 16) - 1,1);
+            decodeMonochromeResidualHM(
+                SAI->nr,
+                SAI->nc,
+                SAI->depth,
+                kdu_expand_path,
+                residual_depth_path_hevc,
+                pgm_residual_depth_path,
+                ncomp1,
+                0,
+                (1 << 16) - 1,
+                1,
+                1);
+
+			//decodeResidualJP2(SAI->depth, kdu_expand_path, jp2_residual_depth_path_jp2, pgm_residual_depth_path, ncomp1, 0, (1 << 16) - 1,1);
 
 		}
 

@@ -18,6 +18,8 @@
 #define CLEVELS 6
 #define USE_JP2_DICTIONARY 1
 
+#define MIN_CU_SIZE 8
+
 void getJP2Header(unsigned char *JP2, unsigned char *&header, int JP2Size, int &headerSize) {
 
 	for (int ii = 0; ii < JP2Size-1; ii++) {
@@ -63,12 +65,12 @@ void updateJP2Dictionary(std::vector< std::vector<unsigned char>> &JP2_dict, uns
 }
 
 void readResidualFromDisk(const char *jp2_residual_path_jp2, int &n_bytes_residual, FILE *input_LF, 
-	std::vector< std::vector<unsigned char>> &JP2_dict) {
+	std::vector< std::vector<unsigned char>> &JP2_dict, const bool USE_JP2_DICTIONARY_) {
 
 	int n_bytes_JP2 = 0;
 	unsigned char *jp2_residual = 0;
 
-	if (USE_JP2_DICTIONARY) {
+	if (USE_JP2_DICTIONARY_) {
 
 		int dict_index = 0, headerSize = 0;
 		unsigned char dict_index_char = 0;
@@ -125,7 +127,7 @@ void readResidualFromDisk(const char *jp2_residual_path_jp2, int &n_bytes_residu
 }
 
 void writeResidualToDisk(const char *jp2_residual_path_jp2, FILE *output_LF_file, int &n_bytes_residual, 
-	std::vector< std::vector<unsigned char>> &JP2_dict) {
+	std::vector< std::vector<unsigned char>> &JP2_dict, const bool USE_JP2_DICTIONARY_) {
 
 	int n_bytes_JP2 = aux_GetFileSize(jp2_residual_path_jp2);
 
@@ -134,7 +136,7 @@ void writeResidualToDisk(const char *jp2_residual_path_jp2, FILE *output_LF_file
 	fread(jp2_residual, sizeof(unsigned char), n_bytes_JP2, jp2_color_residual_file);
 	fclose(jp2_color_residual_file);
 
-	if (USE_JP2_DICTIONARY) {
+	if (USE_JP2_DICTIONARY_) {
 		bool updateDictionary = false;
 		/* get header */
 		unsigned char *JP2header;
@@ -447,17 +449,17 @@ void encodeResidualJP2(
 }
 
 
-void encodeResidualHM(
-    const int nr, 
-    const int nc, 
-    unsigned short *original_intermediate_view, 
-    unsigned short *ps, 
+void encodeMonochromeResidualHM(
+    const int nr,
+    const int nc,
+    unsigned short *original_intermediate_view,
+    unsigned short *ps,
     const char *ppm_residual_path,
-    const char *kdu_compress_path, 
-    const char *jp2_residual_path_jp2, 
-    const float residual_rate, 
-    const int ncomp, 
-    const int offset, 
+    const char *kdu_compress_path,
+    const char *jp2_residual_path_jp2,
+    const float residual_rate,
+    const int ncomp,
+    const int offset,
     const bool RESIDUAL_16BIT_bool,
     const int Q)
 {
@@ -476,25 +478,37 @@ void encodeResidualHM(
         *(residual_image + iir) = (unsigned short)(res_val);
     }
 
-    aux_write16PGMPPM(ppm_residual_path, nc, nr, ncomp, residual_image);
+    int CUsize = MIN_CU_SIZE;
+    int nc1 = nc%CUsize>0 ? (nc / CUsize + 1)*CUsize : (nc / CUsize)*CUsize;
+    int nr1 = nr%CUsize>0 ? (nr / CUsize + 1)*CUsize : (nr / CUsize)*CUsize;
+
+    unsigned short *temp_im =
+        new unsigned short[nc1*nr1*ncomp]();
+
+    for (int ii = 0; ii < nr1*nc1*ncomp; ii++) {
+        temp_im[ii] = offset / dv;
+    }
+
+    int ee = 0;
+    for (int rr = 0; rr < nr1; rr++) {
+        for (int cc = 0; cc < nc1; cc++) {
+            for (int icomp = 0; icomp < ncomp; icomp++) {
+                temp_im[cc + rr*nc1 + icomp*nc1*nr1] =
+                    residual_image[rr + cc*nr + icomp*nc*nr];
+            }
+        }
+    }
+
+    FILE *temp_yuv = fopen("C:/Temp/tmp.yuv", "wb");
+    fwrite(temp_im, sizeof(unsigned short), nr1*nc1, temp_yuv);
+    fclose(temp_yuv);
 
     delete[](residual_image);
-
-    /* convert to YUV420 */
-
-    char RGB_2_YUV420_s[1024];
-    sprintf(
-        RGB_2_YUV420_s,
-        "%s%s%s",
-        "C:/Local/astolap/Programs/ffmpeg-20190225-f948082-win64-static/bin/ffmpeg.exe -y -i ",
-        ppm_residual_path,
-        " -c:v rawvideo -pix_fmt yuv420p10le C:/Temp/tmp.yuv");
-
-    int status = system_1(RGB_2_YUV420_s);
+    delete[](temp_im);
 
     /* make HM cfg */
 
-    std::ifstream inFile("C:/Local/astolap/Data/JPEG_PLENO_2019/GENEVA/Matlab/intra_cfg_1.txt");
+    std::ifstream inFile("C:/Local/astolap/Data/JPEG_PLENO_2019/GENEVA/Matlab/intra_cfg_400.cfg");
     std::ostringstream buffer;
     buffer << inFile.rdbuf();
     inFile.close();
@@ -514,22 +528,23 @@ void encodeResidualHM(
     char HM_call_s[1024];
     sprintf(HM_call_s,
         "C:/Local/astolap/Data/JPEG_PLENO_2019/BRUSSELS/HEVC-HM/bin/vc2015/x64/Release/TAppEncoder.exe -c C:/Temp/intra_cfg_enc.cfg -i C:/Temp/tmp.yuv -o C:/Temp/tmp_rec.yuv -fr 1 -wdt %i -hgt %i -b %s",
-        nc,
-        nr,
+        nc1,
+        nr1,
         jp2_residual_path_jp2);
 
-    status = system_1(HM_call_s);
+    int status = system_1(HM_call_s);
 
 }
 
-void decodeResidualHM(
+
+void decodeMonochromeResidualHM(
     const int nr,
     const int nc,
-    unsigned short *ps, 
-    const char *kdu_expand_path, 
+    unsigned short *ps,
+    const char *kdu_expand_path,
     const char *jp2_residual_path_jp2,
     const char *ppm_residual_path,
-    int ncomp, 
+    const int ncomp,
     const int offset,
     const int maxvali,
     const bool RESIDUAL_16BIT_bool,
@@ -541,21 +556,20 @@ void decodeResidualHM(
     sprintf(hm_decode_s,
         "C:/Local/astolap/Data/JPEG_PLENO_2019/BRUSSELS/HEVC-HM/bin/vc2015/x64/Release/TAppDecoder.exe -b %s -o %s",
         jp2_residual_path_jp2,
-        "C:/Temp/tmp_rec.yuv");
+        "C:/Temp/tmp_rec_dec.yuv");
 
     int status = system_1(hm_decode_s);
 
-    /*convert to rgb*/
-    char YUV420_2_RGB_s[1024];
-    sprintf(
-        YUV420_2_RGB_s,
-        "C:/Local/astolap/Programs/ffmpeg-20190225-f948082-win64-static/bin/ffmpeg.exe -y -s:v %ix%i -pix_fmt yuv420p10le -r 1 -i %s -y %s",
-        nc,
-        nr,
-        "C:/Temp/tmp_rec.yuv",
-        ppm_residual_path);
+    int CUsize = MIN_CU_SIZE;
+    int nc1 = nc%CUsize>0 ? (nc / CUsize + 1)*CUsize : (nc / CUsize)*CUsize;
+    int nr1 = nr%CUsize>0 ? (nr / CUsize + 1)*CUsize : (nr / CUsize)*CUsize;
 
-    status = system_1(YUV420_2_RGB_s);
+    unsigned short *tmp_rec_im = new unsigned short[nr1*nc1]();
+
+    FILE *tmp_yuv_rec = fopen("C:/Temp/tmp_rec_dec.yuv", "rb");
+    fread(tmp_rec_im, sizeof(unsigned short), nr1*nc1, tmp_yuv_rec);
+    fclose(tmp_yuv_rec);
+
 
     /* convert */
 
@@ -568,18 +582,28 @@ void decodeResidualHM(
     dv = static_cast<signed int>(Q);
 
 
-    unsigned short* jp2_residual;
+    unsigned short *jp2_residual;
 
-    int nc1, nr1;
+    //aux_read16PGMPPM(ppm_residual_path, nc1, nr1, ncomp, jp2_residual_padded);
 
-    aux_read16PGMPPM(ppm_residual_path, nc1, nr1, ncomp, jp2_residual);
+    jp2_residual = new unsigned short[nr*nc*ncomp]();
 
-    for (int ii = 0; ii < nc1*nr1*ncomp; ii++) {
-        jp2_residual[ii] = jp2_residual[ii] >> 6;
+    for (int rr = 0; rr < nr; rr++) {
+        for (int cc = 0; cc < nc; cc++) {
+            for (int icomp = 0; icomp < ncomp; icomp++) {
+                jp2_residual[rr + cc*nr + nr*nc*icomp] =
+                    tmp_rec_im[cc + rr*nc1 + nr1*nc1*icomp];
+            }
+        }
     }
-    aux_write16PGMPPM(ppm_residual_path, nc1, nr1, ncomp, jp2_residual);
 
-    if (aux_read16PGMPPM(ppm_residual_path, nc1, nr1, ncomp, jp2_residual))
+    delete[](tmp_rec_im);
+
+    aux_write16PGMPPM(ppm_residual_path, nc, nr, ncomp, jp2_residual);
+
+    int ncomp1;
+
+    if (aux_read16PGMPPM(ppm_residual_path, nc1, nr1, ncomp1, jp2_residual))
     {
 
         for (int iir = 0; iir < nc1*nr1 * ncomp; iir++)
@@ -589,6 +613,8 @@ void decodeResidualHM(
             *(ps + iir) = (unsigned short)(val);
         }
 
-        delete[](jp2_residual);
+
     }
+
+    delete[](jp2_residual);
 }

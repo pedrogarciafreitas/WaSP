@@ -449,7 +449,28 @@ void encodeResidualHM(
         *(residual_image + iir) = (unsigned short)(res_val);
     }
 
-    aux_write16PGMPPM(ppm_residual_path, nc, nr, ncomp, residual_image);
+    int CUsize = 64;
+    int nc1 = nc%CUsize>0 ? (nc / CUsize+ 1)*CUsize : (nc / CUsize )*CUsize;
+    int nr1 = nr%CUsize>0 ? (nr / CUsize + 1)*CUsize : (nr / CUsize)*CUsize;
+
+    unsigned short *temp_im = 
+        new unsigned short[nc1*nr1*ncomp]();
+
+    for (int ii = 0; ii < nr1*nc1*ncomp; ii++) {
+        temp_im[ii] = offset / dv;
+    }
+
+    for (int rr = 0; rr < nr; rr++) {
+        for (int cc = 0; cc < nc; cc++) {
+            for (int icomp = 0; icomp < ncomp; icomp++) {
+                temp_im[rr + (nr1)*cc + icomp*(nc1)*(nr1)] =
+                    residual_image[rr + nr*cc + icomp*nc*nr];
+            }
+        }
+    }
+
+    //aux_write16PGMPPM(ppm_residual_path, nc, nr, ncomp, residual_image);
+    aux_write16PGMPPM(ppm_residual_path, nc1, nr1, ncomp, temp_im);
 
     delete[](residual_image);
 
@@ -487,8 +508,8 @@ void encodeResidualHM(
     char HM_call_s[1024];
     sprintf(HM_call_s,
         "C:/Local/astolap/Data/JPEG_PLENO_2019/BRUSSELS/HEVC-HM/bin/vc2015/x64/Release/TAppEncoder.exe -c C:/Temp/intra_cfg_enc.cfg -i C:/Temp/tmp.yuv -o C:/Temp/tmp_rec.yuv -fr 1 -wdt %i -hgt %i -b %s",
-        nc,
-        nr,
+        nc1,
+        nr1,
         jp2_residual_path_jp2);
 
     status = system_1(HM_call_s);
@@ -518,13 +539,17 @@ void decodeResidualHM(
 
     int status = system_1(hm_decode_s);
 
+    int CUsize = 64;
+    int nc1 = nc%CUsize>0 ? (nc / CUsize + 1)*CUsize : (nc / CUsize)*CUsize;
+    int nr1 = nr%CUsize>0 ? (nr / CUsize + 1)*CUsize : (nr / CUsize)*CUsize;
+
     /*convert to rgb*/
     char YUV420_2_RGB_s[1024];
     sprintf(
         YUV420_2_RGB_s,
         "C:/Local/astolap/Programs/ffmpeg-20190225-f948082-win64-static/bin/ffmpeg.exe -y -s:v %ix%i -pix_fmt yuv420p10le -r 1 -i %s -y %s",
-        nc,
-        nr,
+        nc1,
+        nr1,
         "C:/Temp/tmp_rec.yuv",
         ppm_residual_path);
 
@@ -541,16 +566,22 @@ void decodeResidualHM(
     dv = static_cast<signed int>(Q);
 
 
-    unsigned short* jp2_residual;
+    unsigned short *jp2_residual_padded, *jp2_residual;
 
-    int nc1, nr1;
+    aux_read16PGMPPM(ppm_residual_path, nc1, nr1, ncomp, jp2_residual_padded);
 
-    aux_read16PGMPPM(ppm_residual_path, nc1, nr1, ncomp, jp2_residual);
+    jp2_residual = new unsigned short[nr*nc*ncomp]();
 
-    for (int ii = 0; ii < nc1*nr1*ncomp; ii++) {
-        jp2_residual[ii] = jp2_residual[ii] >> 6;
+    for (int rr = 0; rr < nr; rr++) {
+        for (int cc = 0; cc < nc; cc++) {
+            for (int icomp = 0; icomp < ncomp; icomp++) {
+                jp2_residual[rr+cc*nr+nr*nc*icomp] = 
+                    jp2_residual_padded[rr + cc*nr1 + nr1*nc1*icomp] >> 6;
+            }
+        }
     }
-    aux_write16PGMPPM(ppm_residual_path, nc1, nr1, ncomp, jp2_residual);
+
+    aux_write16PGMPPM(ppm_residual_path, nc, nr, ncomp, jp2_residual);
 
     if (aux_read16PGMPPM(ppm_residual_path, nc1, nr1, ncomp, jp2_residual))
     {

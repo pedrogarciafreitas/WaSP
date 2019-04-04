@@ -19,6 +19,8 @@
 #define CLEVELS 6
 #define USE_JP2_DICTIONARY 1
 
+#define MIN_CU_SIZE 8
+
 void getJP2Header(unsigned char *JP2, unsigned char *&header, int JP2Size, int &headerSize) {
 
 	for (int ii = 0; ii < JP2Size-1; ii++) {
@@ -457,7 +459,7 @@ void encodeMonochromeResidualHM(
         *(residual_image + iir) = (unsigned short)(res_val);
     }
 
-    int CUsize = 64;
+    int CUsize = MIN_CU_SIZE;
     int nc1 = nc%CUsize>0 ? (nc / CUsize + 1)*CUsize : (nc / CUsize)*CUsize;
     int nr1 = nr%CUsize>0 ? (nr / CUsize + 1)*CUsize : (nr / CUsize)*CUsize;
 
@@ -471,8 +473,8 @@ void encodeMonochromeResidualHM(
     for (int rr = 0; rr < nr; rr++) {
         for (int cc = 0; cc < nc; cc++) {
             for (int icomp = 0; icomp < ncomp; icomp++) {
-                temp_im[rr + (nr1)*cc + icomp*(nc1)*(nr1)] =
-                    residual_image[rr + nr*cc + icomp*nc*nr];
+                temp_im[cc + rr*nc1 + icomp*(nc1)*(nr1)] =
+                    residual_image[rr + cc*nr + icomp*nc*nr];
             }
         }
     }
@@ -506,8 +508,8 @@ void encodeMonochromeResidualHM(
     char HM_call_s[1024];
     sprintf(HM_call_s,
         "C:/Local/astolap/Data/JPEG_PLENO_2019/BRUSSELS/HEVC-HM/bin/vc2015/x64/Release/TAppEncoder.exe -c C:/Temp/intra_cfg_enc.cfg -i C:/Temp/tmp.yuv -o C:/Temp/tmp_rec.yuv -fr 1 -wdt %i -hgt %i -b %s",
-        nr1,
         nc1,
+        nr1,
         jp2_residual_path_jp2);
 
     int status = system_1(HM_call_s);
@@ -538,7 +540,7 @@ void decodeMonochromeResidualHM(
 
     int status = system_1(hm_decode_s);
 
-    int CUsize = 64;
+    int CUsize = MIN_CU_SIZE;
     int nc1 = nc%CUsize>0 ? (nc / CUsize + 1)*CUsize : (nc / CUsize)*CUsize;
     int nr1 = nr%CUsize>0 ? (nr / CUsize + 1)*CUsize : (nr / CUsize)*CUsize;
 
@@ -569,7 +571,7 @@ void decodeMonochromeResidualHM(
         for (int cc = 0; cc < nc; cc++) {
             for (int icomp = 0; icomp < ncomp; icomp++) {
                 jp2_residual[rr + cc*nr + nr*nc*icomp] =
-                    tmp_rec_im[rr + cc*nr1 + nr1*nc1*icomp];
+                    tmp_rec_im[cc + rr*nc1 + nr1*nc1*icomp];
             }
         }
     }

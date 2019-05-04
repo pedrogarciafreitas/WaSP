@@ -140,44 +140,11 @@ int main(int argc, char** argv) {
 
 			initViewW(SAI, DispTargs);
 
-			/* Bug fix from VM1.0. The logic for choosing median merging over fixed weight merging was faulty. */
-			if (!SAI->use_median) {
-				if (SAI->stdd < 0.001) {
-					/* merge color with prediction */
-					mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
-					/* hole filling for color*/
-					//holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
-                    for (int32_t icomp = 0; icomp < 3; icomp++) {
-                        uint32_t nholes = holefilling(
-                            SAI->color + icomp*SAI->nr*SAI->nc,
-                            SAI->nr,
-                            SAI->nc,
-                            (uint16_t)0,
-                            SAI->seg_vp);
-                    }
-				}
-				else {
-					/* we don't use LS weights but something derived on geometric distance in view array*/
-					getGeomWeight(SAI, LF);
-					/* merge color with prediction */
-					mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
-					/* hole filling for color*/
-					//holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
-                    for (int32_t icomp = 0; icomp < 3; icomp++) {
-                        uint32_t nholes = holefilling(
-                            SAI->color + icomp*SAI->nr*SAI->nc,
-                            SAI->nr,
-                            SAI->nc,
-                            (uint16_t)0,
-                            SAI->seg_vp);
-                    }
-				}
-			}
-			else {
-				int startt = clock();
-				mergeMedian_N(warped_color_views, DispTargs, SAI, 3);
-				std::cout << "time elapsed in color median merging\t" << (int)clock() - startt << "\n";
-				//holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+            if (SAI->mmode == 0) {
+                /* merge color with prediction */
+                mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
+                /* hole filling for color*/
+                //holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
                 for (int32_t icomp = 0; icomp < 3; icomp++) {
                     uint32_t nholes = holefilling(
                         SAI->color + icomp*SAI->nr*SAI->nc,
@@ -186,8 +153,40 @@ int main(int argc, char** argv) {
                         (uint16_t)0,
                         SAI->seg_vp);
                 }
-			}
-			
+            }
+
+            if (SAI->mmode == 1) {
+                /* we don't use LS weights but something derived on geometric distance in view array*/
+                getGeomWeight(SAI, LF);
+                /* merge color with prediction */
+                mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
+                /* hole filling for color*/
+                //holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+                for (int32_t icomp = 0; icomp < 3; icomp++) {
+                    uint32_t nholes = holefilling(
+                        SAI->color + icomp*SAI->nr*SAI->nc,
+                        SAI->nr,
+                        SAI->nc,
+                        (uint16_t)0,
+                        SAI->seg_vp);
+                }
+            }
+
+            if (SAI->mmode == 2) {
+                int startt = clock();
+                mergeMedian_N(warped_color_views, DispTargs, SAI, 3);
+                std::cout << "time elapsed in color median merging\t" << (int)clock() - startt << "\n";
+                //holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+                for (int32_t icomp = 0; icomp < 3; icomp++) {
+                    uint32_t nholes = holefilling(
+                        SAI->color + icomp*SAI->nr*SAI->nc,
+                        SAI->nr,
+                        SAI->nc,
+                        (uint16_t)0,
+                        SAI->seg_vp);
+                }
+            }
+
 			/* clean */
 			for (int ij = 0; ij < SAI->n_references; ij++)
 			{

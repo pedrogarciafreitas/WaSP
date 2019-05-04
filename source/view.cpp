@@ -57,4 +57,6 @@ void initView(view* view)
 
 	view->has_chrominance = false;
 
+    view->mmode = 0;
+
 }

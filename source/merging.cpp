@@ -322,7 +322,7 @@ void mergeMedian_N(unsigned short **warpedColorViews, float **DispTargs, view *v
 
 	unsigned short *AA2 = new unsigned short[view0->nr*view0->nc*ncomponents]();
 
-#pragma omp parallel for
+//#pragma omp parallel for
 	for (int ii = 0; ii < view0->nr*view0->nc; ii++) {
 		for (int icomp = 0; icomp < ncomponents; icomp++) {
 			std::vector< unsigned short > vals;

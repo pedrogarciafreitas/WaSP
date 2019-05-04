@@ -33,6 +33,10 @@ minimal_config makeMinimalConfig(view *view0)
 
     min_conf.encoding_flags = view0->level<2 ? min_conf.encoding_flags | (1 << 11) : min_conf.encoding_flags;
 
+    min_conf.encoding_flags = view0->mmode==0 ? min_conf.encoding_flags | (1 << 12) : min_conf.encoding_flags;
+    min_conf.encoding_flags = view0->mmode==1 ? min_conf.encoding_flags | (1 << 13) : min_conf.encoding_flags;
+    min_conf.encoding_flags = view0->mmode==2 ? min_conf.encoding_flags | (1 << 14) : min_conf.encoding_flags;
+
 	//min_conf.encoding_flags = view0->has_min_inv_depth ? min_conf.encoding_flags | (1 << 8) : min_conf.encoding_flags;
 
 	return min_conf;
@@ -64,6 +68,10 @@ void setup_form_minimal_config(minimal_config *mconf, view *view0) {
 	view0->has_chrominance = (mconf->encoding_flags & (1 << 10))>0 ? 1 : 0;
 
     view0->level = (mconf->encoding_flags & (1 << 11))>0 ? 1 : 2;
+
+    view0->mmode = (mconf->encoding_flags & (1 << 12))>0 ? 0 : 0;
+    view0->mmode = (mconf->encoding_flags & (1 << 13))>0 ? 1 : view0->mmode;
+    view0->mmode = (mconf->encoding_flags & (1 << 14))>0 ? 2 : view0->mmode;
 
 	//view0->has_min_inv_depth = (mconf->encoding_flags & (1 << 8))>0 ? 1 : 0;
 }

@@ -96,6 +96,8 @@ int main(int argc, char** argv) {
 
 		SAI->i_order = ii;
 
+        fread(&(SAI->mmode), sizeof(int), 1, filept); /*reading*/
+
 		fread(&(SAI->r), sizeof(int), 1, filept); /*reading*/
 		fread(&(SAI->c), sizeof(int), 1, filept); /*reading*/
 
@@ -342,7 +344,7 @@ int main(int argc, char** argv) {
 			initViewW(SAI, DispTargs);
 
 			/* get LS weights */
-			if (SAI->stdd < 0.0001) {
+			if (SAI->mmode==0) {
 				getViewMergingLSWeights_N(SAI, warped_color_views, DispTargs, original_color_view);
 				/* merge color with prediction */
 				mergeWarped_N(warped_color_views, DispTargs, SAI, 3);
@@ -357,13 +359,12 @@ int main(int argc, char** argv) {
                         SAI->seg_vp);
                 }
 			}
-			else {
-				/* get baseline with median, we then study whether weighting improves */
-				/* merge color with median */
-				int startt = clock();
-				mergeMedian_N(warped_color_views, DispTargs, SAI, 3);
-				std::cout << "time elapsed in color median merging\t" << (float)( (int)clock() - startt ) / CLOCKS_PER_SEC << "\n";
-				//holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+
+            if (SAI->mmode == 2) {
+                int startt = clock();
+                mergeMedian_N(warped_color_views, DispTargs, SAI, 3);
+                std::cout << "time elapsed in color median merging\t" << (float)((int)clock() - startt) / CLOCKS_PER_SEC << "\n";
+                //holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
 
                 for (int32_t icomp = 0; icomp < 3; icomp++) {
                     uint32_t nholes = holefilling(
@@ -373,13 +374,31 @@ int main(int argc, char** argv) {
                         (uint16_t)0,
                         SAI->seg_vp);
                 }
+            }
+
+			if(SAI->mmode==1) {
+				///* get baseline with median, we then study whether weighting improves */
+				///* merge color with median */
+				//int startt = clock();
+				//mergeMedian_N(warped_color_views, DispTargs, SAI, 3);
+				//std::cout << "time elapsed in color median merging\t" << (float)( (int)clock() - startt ) / CLOCKS_PER_SEC << "\n";
+				////holefilling(SAI->color, 3, SAI->nr, SAI->nc, 0);
+
+    //            for (int32_t icomp = 0; icomp < 3; icomp++) {
+    //                uint32_t nholes = holefilling(
+    //                    SAI->color + icomp*SAI->nr*SAI->nc,
+    //                    SAI->nr,
+    //                    SAI->nc,
+    //                    (uint16_t)0,
+    //                    SAI->seg_vp);
+    //            }
 
 
+				////double psnr_med = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, 10);
 				//double psnr_med = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, 10);
-				double psnr_med = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, 10);
-
-				unsigned short *tmp_m = new unsigned short[SAI->nr*SAI->nc*3]();
-				memcpy(tmp_m, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+                double psnr_med = 0;
+				//unsigned short *tmp_m = new unsigned short[SAI->nr*SAI->nc*3]();
+				//memcpy(tmp_m, SAI->color, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
 
 				double psnr_w = 0;
 
@@ -388,6 +407,9 @@ int main(int argc, char** argv) {
 					float stdi = 0;
 
 					for (float stds = STD_SEARCH_LOW; stds < STD_SEARCH_HIGH; stds += STD_SEARCH_STEP) {
+
+                        memset(SAI->color, 0x00, sizeof(unsigned short)*SAI->nr*SAI->nc * 3);
+
 						SAI->stdd = stds;
 						/* we don't use LS weights but something derived on geometric distance in view array*/
 						getGeomWeight(SAI, LF);
@@ -433,17 +455,19 @@ int main(int argc, char** argv) {
                         (uint16_t)0,
                         SAI->seg_vp);
                 }
+
 				psnr_w = getYCbCr_422_PSNR(SAI->color, original_color_view, SAI->nr, SAI->nc, 3, BIT_DEPTH);
 
-				if (psnr_w < psnr_med) {
-					delete[](SAI->color);
-					SAI->color = tmp_m;
-					SAI->use_median = true;
-					SAI->stdd = 0.0;
-				}
-				else {
-					delete[](tmp_m);
-				}
+				//if (psnr_w < psnr_med) {
+				//	delete[](SAI->color);
+				//	SAI->color = tmp_m;
+				//	//SAI->use_median = true;
+    //                SAI->mmode = 2;
+				//	SAI->stdd = 0.0;
+				//}
+				//else {
+				//	delete[](tmp_m);
+				//}
 			}
 
 			/* clean */

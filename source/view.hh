@@ -78,6 +78,9 @@ struct view{
 
     uint32_t level;
 
+
+    uint32_t mmode;
+
 };
 
 void initView(view* view);

@@ -2,6 +2,7 @@
 #define VIEW_HH
 
 #include <stdint.h>
+#include <vector>
 
 #define MEDFILT_DEPTH false
 
@@ -80,6 +81,8 @@ struct view{
 
 
     uint32_t mmode;
+
+    std::vector<std::vector<double>> dcorr_vals;
 
 };
 

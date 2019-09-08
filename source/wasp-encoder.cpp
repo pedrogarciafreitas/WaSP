@@ -48,6 +48,8 @@ int main(int argc, char** argv) {
 	const char *kakadu_dir = argv[3];
 	const char *config_file = argv[4];
 
+    const char *d_correction_file = argv[5];
+
 	char kdu_compress_path[1024];
 	char kdu_expand_path[1024];
 
@@ -189,6 +191,45 @@ int main(int argc, char** argv) {
 	}
 	fclose(filept);
 
+    filept = fopen(d_correction_file, "rb");
+    std::vector<std::vector<double>> dcorr_vals;
+
+    int32_t nrr;
+
+    fread(&nrr, 1, sizeof(int32_t), filept);
+
+    int smin_i, smax_i;
+    float smin, smax;
+
+    fread(&smin_i, 1, sizeof(int32_t), filept);
+    fread(&smax_i, 1, sizeof(int32_t), filept);
+
+    smin = static_cast<float>(smin_i) / 100000;
+    smax = static_cast<float>(smax_i) / 100000;
+
+    for (int ii = 0; ii < n_views_total; ii++) {
+        std::vector<double> tmpdc;
+        int32_t *dval;
+        dval = new int32_t[nrr]();
+
+        if (nrr > 0) {
+            fread(dval, sizeof(int32_t), nrr, filept);
+
+            for (int ir = 0; ir < nrr; ir++) {
+                tmpdc.push_back(static_cast<float>(dval[ir]) / 100000);
+            }
+        }
+        else {
+            tmpdc.push_back(0.0f);
+        }
+        delete[](dval);
+        dcorr_vals.push_back(tmpdc);
+    }
+    fclose(filept);
+
+    LF->dcorr_vals = dcorr_vals;
+    
+
     /* Here we obtain the hierchical level of the view.
     We obtain the level by inspecting which views are used as references for a given view.
     Since only lower levels can be used as references, we can infer the level of the current view.*/
@@ -225,6 +266,21 @@ int main(int argc, char** argv) {
 	FILE *output_LF_file;
 	output_LF_file = fopen(path_out_LF_data, "wb");
 	fwrite(&n_views_total, sizeof(int), 1, output_LF_file);
+
+    fwrite(&nrr, sizeof(uint32_t), 1, output_LF_file);
+
+    fwrite(&smin_i, 1, sizeof(int32_t), output_LF_file);
+    fwrite(&smax_i, 1, sizeof(int32_t), output_LF_file);
+
+    for (int ii = 0; ii < n_views_total; ii++) {
+        for (int ir = 0; ir < nrr; ir++) {
+            uint32_t tmpdc = static_cast<uint32_t>(round(LF->dcorr_vals.at(ii).at(ir) * 100000));
+            if (nrr > 0) {
+                fwrite(&tmpdc, sizeof(uint32_t), 1, output_LF_file);
+            }
+        }
+    }
+
 	fclose(output_LF_file);
 
 	bool global_header_written = false;
@@ -251,6 +307,8 @@ int main(int argc, char** argv) {
 
 	double psnr_yuv_mean = 0;
 
+    uint16_t *segm = NULL;
+
 	for (int ii = 0; ii < n_views_total; ii++) {
 
 		view *SAI = LF + ii;
@@ -267,6 +325,11 @@ int main(int argc, char** argv) {
 
 		int nc1, nr1, ncomp1;
 		aux_read16PGMPPM(SAI->path_input_ppm, SAI->nc, SAI->nr, ncomp1, original_color_view);
+
+        if (ii == 0) {
+            LF->segmentation = new uint16_t[SAI->nr*SAI->nc]();
+            segm = LF->segmentation;
+        }
 
 		///* debug yuv */
 		//unsigned short *ycbcr = new unsigned short[SAI->nr*SAI->nc * 3]();
@@ -811,6 +874,52 @@ int main(int argc, char** argv) {
 			SAI->has_depth_residual = true;
 		}
 
+        /* make segmentation */
+        if (ii == 0) {
+
+            uint16_t *DD1 = SAI->depth;
+
+            for (int ijk = 0; ijk < SAI->nr*SAI->nc; ijk++) {
+
+                uint16_t maxi16, mini16;
+
+                maxi16 = static_cast<uint16_t>(round((smax*(float)(1 << D_DEPTH)) + SAI->min_inv_d));
+                mini16 = static_cast<uint16_t>(round((smin*(float)(1 << D_DEPTH)) + SAI->min_inv_d));
+
+                if (DD1[ijk] > maxi16 ) {
+                    DD1[ijk] = maxi16;
+                }
+
+                if (DD1[ijk] < mini16) {
+                    DD1[ijk] = mini16;
+                }
+
+            }
+
+            if (nrr > 0) {
+                float dv = (smax - smin) / (nrr);
+
+                std::vector<float> rrange;
+
+                for (int ir = 0; ir < nrr + 1; ir++) {
+                    rrange.push_back(dv*ir + smin);
+                }
+
+                for (int ir = 1; ir < nrr + 1; ir++) {
+                    for (int ijk = 0; ijk < SAI->nr*SAI->nc; ijk++) {
+                        float disp = ((float)DD1[ijk] - (float)SAI->min_inv_d) / (float)(1 << D_DEPTH);
+
+                        if (disp >= rrange.at(ir - 1) && disp < rrange.at(ir)) {
+                            segm[ijk] = ir - 1;
+                        }
+                    }
+                }
+            }
+
+        }
+
+        aux_write16PGMPPM("C:/Temp/segm.pgm", SAI->nc, SAI->nr, 1, segm);
+
 		/* median filter depth */
 		if (MEDFILT_DEPTH) {
 			unsigned short *tmp_depth = new unsigned short[SAI->nr*SAI->nc]();
@@ -925,10 +1034,10 @@ int main(int argc, char** argv) {
 			SAI->seg_vp = NULL;
 		}
 
-		if (SAI->segmentation != NULL) {
-			delete[](SAI->segmentation);
-			SAI->segmentation = NULL;
-		}
+		//if (SAI->segmentation != NULL) {
+		//	delete[](SAI->segmentation);
+		//	SAI->segmentation = NULL;
+		//}
 
 	}
 

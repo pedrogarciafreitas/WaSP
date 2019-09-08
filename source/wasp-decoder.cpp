@@ -43,6 +43,39 @@ int main(int argc, char** argv) {
 
 	n_bytes_prediction += (int)fread(&n_views_total, sizeof(int), 1,input_LF)* sizeof(int);
 
+    std::vector<std::vector<double>> dcorr_vals;
+
+    int32_t nrr;
+
+    fread(&nrr, 1, sizeof(int32_t), input_LF);
+
+    int smin_i, smax_i;
+    float smin, smax;
+
+    fread(&smin_i, 1, sizeof(int32_t), input_LF);
+    fread(&smax_i, 1, sizeof(int32_t), input_LF);
+
+    smin = static_cast<float>(smin_i) / 100000;
+    smax = static_cast<float>(smax_i) / 100000;
+
+    for (int ii = 0; ii < n_views_total; ii++) {
+        std::vector<double> tmpdc;
+        int32_t *dval;
+        dval = new int32_t[nrr]();
+        if (nrr > 0) {
+            fread(dval, sizeof(int32_t), nrr, input_LF);
+
+            for (int ir = 0; ir < nrr; ir++) {
+                tmpdc.push_back(static_cast<float>(dval[ir]) / 100000);
+            }
+        }
+        else {
+            tmpdc.push_back(0.0f);
+        }
+        delete[](dval);
+        dcorr_vals.push_back(tmpdc);
+    }
+
 	int _NR, _NC;
 
 	n_bytes_prediction += (int)fread(&_NR, sizeof(int), 1, input_LF)* sizeof(int);
@@ -65,14 +98,19 @@ int main(int argc, char** argv) {
 
 	view *LF = new view[n_views_total]();
 
+    LF->dcorr_vals = dcorr_vals;
+
 	int ii = 0; /*view index*/
+
+    uint16_t *segm = NULL;
 
 	while ( ii < n_views_total ) {
 
 		view *SAI = LF+ii; 
-		ii++;
 
 		initView(SAI);
+
+        SAI->i_order = ii;
 
 		SAI->nr = _NR;
 		SAI->nc = _NC;
@@ -80,6 +118,11 @@ int main(int argc, char** argv) {
 		if (MINIMUM_DEPTH > 0) {
 			SAI->min_inv_d = (int)MINIMUM_DEPTH;
 		}
+
+        if (ii == 0) {
+            LF->segmentation = new uint16_t[SAI->nr*SAI->nc]();
+            segm = LF->segmentation;
+        }
 
 		minimal_config mconf;
 
@@ -343,6 +386,51 @@ int main(int argc, char** argv) {
 
 		}
 
+
+        /* make segmentation */
+        if (ii == 0) {
+
+            uint16_t *DD1 = SAI->depth;
+
+            for (int ijk = 0; ijk < SAI->nr*SAI->nc; ijk++) {
+
+                uint16_t maxi16, mini16;
+
+                maxi16 = static_cast<uint16_t>(round((smax*(float)(1 << D_DEPTH)) + SAI->min_inv_d));
+                mini16 = static_cast<uint16_t>(round((smin*(float)(1 << D_DEPTH)) + SAI->min_inv_d));
+
+                if (DD1[ijk] > maxi16) {
+                    DD1[ijk] = maxi16;
+                }
+
+                if (DD1[ijk] < mini16) {
+                    DD1[ijk] = mini16;
+                }
+
+            }
+
+            if (nrr > 0) {
+                float dv = (smax - smin) / (nrr);
+
+                std::vector<float> rrange;
+
+                for (int ir = 0; ir < nrr + 1; ir++) {
+                    rrange.push_back(dv*ir + smin);
+                }
+
+                for (int ir = 1; ir < nrr + 1; ir++) {
+                    for (int ijk = 0; ijk < SAI->nr*SAI->nc; ijk++) {
+                        float disp = ((float)DD1[ijk] - (float)SAI->min_inv_d) / (float)(1 << D_DEPTH);
+
+                        if (disp >= rrange.at(ir - 1) && disp < rrange.at(ir)) {
+                            segm[ijk] = ir - 1;
+                        }
+                    }
+                }
+            }
+
+        }
+
 		/* median filter depth */
 		if (MEDFILT_DEPTH) {
 			unsigned short *tmp_depth = new unsigned short[SAI->nr*SAI->nc]();
@@ -375,6 +463,8 @@ int main(int argc, char** argv) {
 		}
 
 		printf("decoded: %i kilobytes\n", ftell(input_LF) / 1000);
+
+        ii++;
 	}
 
 	fclose(input_LF);

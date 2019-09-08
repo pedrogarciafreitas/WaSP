@@ -26,8 +26,13 @@ void warpView0_to_View1(view *view0, view *view1, unsigned short *&warpedColor, 
 	for (int ij = 0; ij < view0->nr*view0->nc; ij++)
 	{
 
-
 		float disp = ((float)DD1[ij] - (float)view0->min_inv_d) / (float)(1 << D_DEPTH);// pow(2, D_DEPTH);
+
+        if (view0->i_order == 0) {
+            int indx = view0->segmentation[ij];
+            disp = disp + view0->dcorr_vals.at(view1->i_order).at(indx);
+        }
+
 		float DM_COL = disp*ddx;
 		float DM_ROW = -disp*ddy;
 		//float disp0 = abs(DM_COL) + abs(DM_ROW);
